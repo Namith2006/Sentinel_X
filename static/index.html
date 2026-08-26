@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel X — AI Cybersecurity Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        'brand-dark': '#050816',
+                        cyber: {
+                            900: '#050816',
+                            800: '#0a0f24',
+                            700: '#0f172a',
+                            600: '#1e293b',
+                            500: '#334155',
+                        }
+                    },
+                    boxShadow: {
+                        'neon-cyan':  '0 0 20px rgba(34, 211, 238, 0.35)',
+                        'neon-red':   '0 0 20px rgba(244, 63, 94, 0.35)',
+                        'neon-green': '0 0 20px rgba(34, 197, 94, 0.35)',
+                        'neon-purple':'0 0 20px rgba(168, 85, 247, 0.35)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        html, body { background-color: #050816; }
+        body {
+            background:
+                radial-gradient(circle at 20% 0%,  rgba(34, 211, 238, 0.08), transparent 40%),
+                radial-gradient(circle at 80% 100%, rgba(168, 85, 247, 0.08), transparent 40%),
+                #050816;
+            min-height: 100vh;
+        }
+        .glass {
+            background: rgba(15, 23, 42, 0.55);
+            -webkit-backdrop-filter: blur(14px);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(34, 211, 238, 0.12);
+        }
+        .glass-strong {
+            background: rgba(15, 23, 42, 0.75);
+            -webkit-backdrop-filter: blur(18px);
+            backdrop-filter: blur(18px);
+            border: 1px solid rgba(34, 211, 238, 0.18);
+        }
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #334155; border-radius: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+
+        @keyframes pulse-ring {
+            0%   { transform: scale(1);    opacity: 1;   }
+            70%  { transform: scale(1.18); opacity: 0.4; }
+            100% { transform: scale(1);    opacity: 1;   }
+        }
+        .pulse-ring {
+            animation: pulse-ring 2s infinite;
+            will-change: transform, opacity;
+        }
+
+        .drag-over { border-color: #a855f7 !important; background: rgba(168, 85, 247, 0.08); }
+
+        .led-dot { width: 8px; height: 8px; border-radius: 9999px; display: inline-block; }
+        .led-online  { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .led-offline { background: #f43f5e; box-shadow: 0 0 8px #f43f5e; }
+        .led-busy    { background: #facc15; box-shadow: 0 0 8px #facc15; }
+
+        #lockScreen {
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+        }
+
+        /* Gauge arc smooth animation */
+        #gaugeArc {
+            transition: stroke-dashoffset 1s ease, stroke 0.5s ease;
+        }
+
+        /* Severity badges inside the Llama-3 panel */
+        .sev-critical { background: rgba(244, 63, 94, 0.12);  border: 1px solid rgba(244, 63, 94, 0.4);  color: #fda4af; }
+        .sev-high     { background: rgba(249, 115, 22, 0.12); border: 1px solid rgba(249, 115, 22, 0.4); color: #fdba74; }
+        .sev-medium   { background: rgba(250, 204, 21, 0.12); border: 1px solid rgba(250, 204, 21, 0.4); color: #fde68a; }
+        .sev-low      { background: rgba(34, 197, 94, 0.12);  border: 1px solid rgba(34, 197, 94, 0.4);  color: #86efac; }
+
+        /* New row flash on prepend */
+        @keyframes row-flash {
+            0%   { background: rgba(34, 211, 238, 0.25); }
+            100% { background: transparent; }
+        }
+        .row-flash { animation: row-flash 1.4s ease-out; }
+    </style>
+</head>
+<body class="bg-brand-dark text-slate-100 font-sans antialiased">
+
+    <!-- =================== WEBAUTHN BIOMETRIC LOCK OVERLAY =================== -->
+    <div id="lockScreen" class="fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/95">
+        <div class="glass-strong max-w-md w-full mx-4 p-8 rounded-2xl text-center shadow-neon-cyan">
+            <div class="mx-auto w-20 h-20 rounded-full bg-cyan-500/10 flex items-center justify-center pulse-ring mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 11c1.66 0 3-1.34 3-3V6a3 3 0 10-6 0v2c0 1.66 1.34 3 3 3zm6.5 0c-.83 0-1.5.67-1.5 1.5v6c0 .83-.67 1.5-1.5-1.5H6c-.83 0-1.5-.67-1.5-1.5v-6c0-.83-.67-1.5-1.5-1.5S2 12.67 2 13.5v6A4 4 0 006 23.5h12a4 4 0 004-4v-6c0-.83-.67-1.5-1.5-1.5z"/>
+                </svg>
+            </div>
+            <h1 id="guardTitle" class="text-2xl font-bold tracking-tight text-cyan-300 select-none cursor-default" title="Sentinel X Guard">
+                SENTINEL X GUARD
+            </h1>
+            <p class="text-sm text-slate-400 mt-1">AI-Powered Threat Intelligence Console</p>
+
+            <div class="mt-8 space-y-3">
+                <button id="unlockBtn" type="button"
+                        class="w-full py-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-cyber-900 font-semibold transition shadow-neon-cyan">
+                    🔐 Authenticate
+                </button>
+                <button id="registerBtn" type="button"
+                        class="w-full py-3 rounded-lg border border-slate-600 hover:border-cyan-400 text-slate-300 hover:text-cyan-300 font-medium transition">
+                    🆕 Register New Passkey on This Device
+                </button>
+            </div>
+
+            <p id="lockMsg" class="text-xs text-slate-500 mt-5 font-mono">Awaiting biometric verification…</p>
+            <p id="auth-status" class="text-[10px] text-slate-600 mt-2 font-mono">&nbsp;</p>
+        </div>
+    </div>
+
+    <!-- =================== MAIN DASHBOARD =================== -->
+    <div id="dashboard" class="hidden max-w-7xl mx-auto px-6 py-8">
+
+        <!-- HEADER -->
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center pulse-ring">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">Sentinel X</h1>
+                    <p class="text-xs text-slate-400">Autonomous Cyber Defense · Operator <span id="userLabel" class="text-cyan-400 font-mono">—</span></p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4 text-sm">
+                <!-- Global Refresh Button -->
+                <button onclick="clearAll()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-400 border border-slate-700 transition" title="Clear all fields and results">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span class="hidden sm:inline font-semibold">Refresh</span>
+                </button>
+                <div class="h-6 w-px bg-slate-700"></div>
+                <div class="flex items-center gap-2">
+                    <span id="backendDot" class="led-dot led-offline"></span>
+                    <span id="backendStatus" class="text-slate-400 font-mono">Backend: offline</span>
+                </div>
+                <div id="clock" class="text-slate-400 font-mono text-xs">--:--:--</div>
+            </div>
+        </header>
+
+        <!-- =================== TOP ROW: SCORE GAUGE + ENGINE STATUS =================== -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+
+            <!-- CIRCULAR SECURITY SCORE GAUGE -->
+            <div class="glass rounded-2xl p-6 flex flex-col items-center justify-center">
+                <h2 class="text-sm font-semibold tracking-widest text-cyan-300 uppercase mb-4">Security Score</h2>
+                <div class="relative w-48 h-48">
+                    <svg viewBox="0 0 120 120" class="w-full h-full -rotate-90">
+                        <circle cx="60" cy="60" r="52" stroke="#1e293b" stroke-width="10" fill="none"/>
+                        <circle id="gaugeArc" cx="60" cy="60" r="52" stroke="#22d3ee" stroke-width="10" fill="none"
+                                stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/>
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span id="gaugeValue" class="text-4xl font-bold text-cyan-300 font-mono">--</span>
+                        <span class="text-xs text-slate-400 uppercase tracking-wider">/ 100</span>
+                    </div>
+                </div>
+                <p id="gaugeLabel" class="mt-4 text-sm text-slate-400">Initializing…</p>
+            </div>
+
+            <!-- ACTIVE ENGINE STATUSES -->
+            <div class="glass rounded-2xl p-6 lg:col-span-2 flex flex-col">
+                <h2 class="text-sm font-semibold tracking-widest text-cyan-300 uppercase mb-4">Active Engines</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-cyber-800/60 border border-slate-700/60">
+                        <div class="flex items-center gap-3">
+                            <span class="led-dot led-online" id="dot-phishing"></span>
+                            <div>
+                                <p class="text-sm font-semibold text-cyan-200">Phishing Engine</p>
+                                <p class="text-[10px] text-slate-500 font-mono">XGBoost · /api/scan-url</p>
+                            </div>
+                        </div>
+                        <span class="text-[10px] text-emerald-400 font-mono" id="status-phishing">ONLINE</span>
+                    </div>
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-cyber-800/60 border border-slate-700/60">
+                        <div class="flex items-center gap-3">
+                            <span class="led-dot led-online" id="dot-deepfake"></span>
+                            <div>
+                                <p class="text-sm font-semibold text-purple-200">Deepfake Engine</p>
+                                <p class="text-[10px] text-slate-500 font-mono">PyTorch · /api/scan-image</p>
+                            </div>
+                        </div>
+                        <span class="text-[10px] text-emerald-400 font-mono" id="status-deepfake">ONLINE</span>
+                    </div>
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-cyber-800/60 border border-slate-700/60">
+                        <div class="flex items-center gap-3">
+                            <span class="led-dot led-online" id="dot-password"></span>
+                            <div>
+                                <p class="text-sm font-semibold text-emerald-200">Password Engine</p>
+                                <p class="text-[10px] text-slate-500 font-mono">HIBP · /api/check-password</p>
+                            </div>
+                        </div>
+                        <span class="text-[10px] text-emerald-400 font-mono" id="status-password">ONLINE</span>
+                    </div>
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-cyber-800/60 border border-slate-700/60">
+                        <div class="flex items-center gap-3">
+                            <span class="led-dot led-online" id="dot-llm"></span>
+                            <div>
+                                <p class="text-sm font-semibold text-amber-200">Llama-3 Expert</p>
+                                <p class="text-[10px] text-slate-500 font-mono">Ollama · /api/mitigate</p>
+                            </div>
+                        </div>
+                        <span class="text-[10px] text-emerald-400 font-mono" id="status-llm">ONLINE</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- =================== MIDDLE ROW: THREE INPUT CARDS =================== -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+
+            <!-- URL / PHISHING SCANNER -->
+            <div class="glass rounded-2xl p-5">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-2xl">🌐</span>
+                    <h2 class="font-semibold text-cyan-300">URL / Phishing Scanner</h2>
+                </div>
+                <input id="urlInput" type="text" placeholder="https://suspicious-link.com"
+                       title="URL to scan for phishing threats"
+                       aria-label="URL to scan for phishing threats"
+                       class="w-full px-3 py-2 rounded-lg bg-cyber-700 border border-slate-700 focus:border-cyan-400 focus:outline-none text-sm font-mono">
+                <button type="button" onclick="scanUrl()"
+                        class="w-full mt-3 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-cyber-900 font-semibold text-sm transition">
+                    Scan Link
+                </button>
+                <div id="urlResult" class="hidden mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono"></div>
+            </div>
+
+            <!-- DEEPFAKE IMAGE UPLOADER (DRAG-AND-DROP) -->
+            <div class="glass rounded-2xl p-5">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-2xl">🖼️</span>
+                    <h2 class="font-semibold text-purple-300">Deepfake Image Uploader</h2>
+                </div>
+                <div id="dropZone"
+                     class="border-2 border-dashed border-slate-600 rounded-lg p-5 text-center cursor-pointer hover:border-purple-400 transition">
+                    <input id="imageInput" type="file" accept="image/*" class="hidden"
+                           title="Upload an image to scan for deepfake artifacts"
+                           aria-label="Upload an image to scan for deepfake artifacts">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-9 h-9 mx-auto text-slate-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5V18a2 2 0 002 2h14a2 2 0 002-2v-1.5M16.5 12L12 7.5 7.5 12M12 7.5V21"/>
+                    </svg>
+                    <p class="text-xs text-slate-400">Drag &amp; drop image, or <span class="text-purple-300 underline">browse</span></p>
+                    <p id="fileName" class="text-[10px] text-slate-500 mt-1 font-mono">No file selected</p>
+                </div>
+                <div id="imageResult" class="hidden mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono"></div>
+            </div>
+
+            <!-- PASSWORD CHECKER -->
+            <div class="glass rounded-2xl p-5">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-2xl">🔑</span>
+                    <h2 class="font-semibold text-emerald-300">Password Checker</h2>
+                </div>
+                <div class="relative">
+                    <input id="passwordInput" type="password" placeholder="Type a password…"
+                           title="Password to evaluate for strength and breach exposure"
+                           aria-label="Password to evaluate for strength and breach exposure"
+                           class="w-full px-3 py-2 pr-10 rounded-lg bg-cyber-700 border border-slate-700 focus:border-emerald-400 focus:outline-none text-sm font-mono">
+                    <button type="button" onclick="togglePassword()"
+                            title="Show or hide the password"
+                            aria-label="Show or hide the password"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-300 text-xs">
+                        👁
+                    </button>
+                </div>
+                <button type="button" onclick="checkPassword()"
+                        class="w-full mt-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-cyber-900 font-semibold text-sm transition">
+                    Check Strength
+                </button>
+                <div id="passwordResult" class="hidden mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono"></div>
+            </div>
+        </div>
+
+        <!-- =================== BOTTOM ROW: AI EXPERT + CRYPTO LEDGER =================== -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- AI INCIDENT EXPERT (LLAMA-3 MITIGATION PANEL) -->
+            <div class="glass rounded-2xl p-5 flex flex-col">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl">🤖</span>
+                        <h2 class="font-semibold text-purple-300">AI Incident Expert (Llama-3)</h2>
+                    </div>
+                    <span id="expertStatus" class="text-[10px] text-slate-500 font-mono">standby</span>
+                </div>
+                <div id="expertPanel" class="flex-1 overflow-y-auto scrollbar-thin bg-cyber-900/50 rounded-lg p-4 min-h-[280px] max-h-[360px]">
+                    <div class="text-slate-500 text-sm italic flex items-center gap-2">
+                        <span class="led-dot led-busy"></span>
+                        No active incident. Mitigation engine is on standby.
+                    </div>
+                </div>
+            </div>
+
+            <!-- SHA-256 CRYPTOGRAPHIC LEDGER -->
+            <div class="glass rounded-2xl p-5 flex flex-col">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl">📒</span>
+                        <h2 class="font-semibold text-amber-300">SHA-256 Cryptographic Ledger</h2>
+                    </div>
+                    <span class="text-[10px] text-slate-500 font-mono">live · prepended</span>
+                </div>
+                <!-- ✨ NEW: SCROLLABLE WRAPPER & STICKY HEADER ✨ -->
+                <div class="overflow-y-auto max-h-[360px] overflow-x-hidden scrollbar-thin flex-1 pr-1">
+                    <table class="w-full text-sm relative">
+                        <thead class="text-xs uppercase text-slate-400 sticky top-0 bg-cyber-800 z-10 shadow-md">
+                            <tr>
+                                <th class="text-left py-3 pl-2 pr-3 border-b border-slate-700 rounded-tl-md">#</th>
+                                <th class="text-left py-3 pr-3 border-b border-slate-700">Timestamp</th>
+                                <th class="text-left py-3 pr-3 border-b border-slate-700">Vector</th>
+                                <th class="text-left py-3 pr-3 border-b border-slate-700">SHA-256 Hash</th>
+                                <th class="text-left py-3 border-b border-slate-700 rounded-tr-md">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledgerBody" class="font-mono text-xs">
+                            <tr><td colspan="5" class="py-4 text-center text-slate-500 italic">Ledger awaiting first event…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <footer class="mt-8 text-center text-xs text-slate-600 font-mono">
+            Sentinel X · v2.0 · WebAuthn · Tailwind · FastAPI · Llama-3
+        </footer>
+    </div>
+    
+    <!-- =================== FLOATING AI SECURITY ASSISTANT =================== -->
+    <!-- Floating Toggle Button -->
+    <button id="chatToggle" onclick="toggleChat()" 
+            title="Toggle AI Assistant" aria-label="Toggle AI Assistant"
+            class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-cyan-500 hover:bg-cyan-400 flex items-center justify-center shadow-neon-cyan transition z-40 pulse-ring">
+        <span class="text-2xl">🤖</span>
+    </button>
+
+    <!-- Chat Window -->
+    <div id="chatWindow" class="hidden fixed bottom-24 right-6 w-80 md:w-96 h-[450px] glass-strong rounded-2xl flex flex-col z-50 overflow-hidden shadow-2xl border border-cyan-500/30">
+        <!-- Chat Header -->
+        <div class="bg-cyber-900/80 p-4 border-b border-slate-700 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="led-dot led-online"></span>
+                <h3 class="font-semibold text-cyan-300 text-sm">Security Copilot</h3>
+            </div>
+            <button onclick="toggleChat()" title="Close Chat" aria-label="Close Chat" class="text-slate-400 hover:text-white transition">✖</button>
+        </div>
+        
+        <!-- Chat Messages Area -->
+        <div id="chatMessages" class="flex-1 min-h-0 p-4 overflow-y-auto scrollbar-thin space-y-4 bg-cyber-900/40">
+            <div class="flex gap-3">
+                <div class="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center shrink-0">🤖</div>
+                <div class="bg-cyber-800 border border-slate-700 p-3 rounded-lg rounded-tl-none text-xs text-slate-300 leading-relaxed shadow-sm">
+                    Operator, I am online. Ask me anything about system hardening, privacy hygiene, or analyzing current threat vectors.
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Input Area -->
+        <div class="p-3 border-t border-slate-700 bg-cyber-900/80 flex gap-2">
+            <!-- Added disabled styles to the input -->
+            <input id="chatInput" type="text" placeholder="Type a security question..." 
+                   class="flex-1 px-3 py-2 rounded-lg bg-cyber-700 border border-slate-600 focus:border-cyan-400 focus:outline-none text-xs font-mono text-slate-200 placeholder-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                   onkeypress="if(event.key === 'Enter') sendChatMessage()">
+            
+            <!-- Added ID 'chatSendBtn' and disabled styles to the button -->
+            <button id="chatSendBtn" onclick="sendChatMessage()" title="Send Message" aria-label="Send Message" 
+                    class="px-3 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-cyber-900 font-bold transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+            </button>
+        </div>
+    </div>
+    
+    <!-- =================== JAVASCRIPT =================== -->
+    <script>
+    // ---------- CONFIG ----------
+    const API = ""; 
+    const RP_NAME = "Sentinel X";
+    const USER_ID = "sentinel-operator-001";
+    const CRED_KEY = "sentinel_x_passkey_id";
+
+    // ---------- HELPERS ----------
+    const $  = (id) => document.getElementById(id);
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    function bytesToB64Url(buf) {
+        return btoa(String.fromCharCode(...new Uint8Array(buf)))
+            .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    }
+    function b64UrlToBytes(s) {
+        s = s.replace(/-/g,'+').replace(/_/g,'/');
+        while (s.length % 4) s += '=';
+        const bin = atob(s);
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+    }
+
+    // ---------- CLEARING FUNCTIONS ----------
+    function closeResult(boxId, inputId, extraId) {
+        const box = $(boxId);
+        if (box) {
+            box.classList.add("hidden");
+            box.innerHTML = "";
+        }
+        if (inputId) {
+            const input = $(inputId);
+            if (input) {
+                if (input.type === 'file') input.value = "";
+                else input.value = "";
+            }
+        }
+        if (extraId) {
+            const extra = $(extraId);
+            if (extra) extra.textContent = "No file selected";
+        }
+    }
+
+    function clearAll() {
+        closeResult('urlResult', 'urlInput');
+        closeResult('imageResult', 'imageInput', 'fileName');
+        closeResult('passwordResult', 'passwordInput');
+        
+        // Reset Llama-3 Panel
+        const expertPanel = $("expertPanel");
+        const expertStatus = $("expertStatus");
+        if (expertPanel) expertPanel.innerHTML = '<div class="text-slate-500 text-sm italic flex items-center gap-2"><span class="led-dot led-busy"></span>No active incident. Mitigation engine is on standby.</div>';
+        if (expertStatus) expertStatus.textContent = "standby";
+    }
+
+    function setBackend(status) {
+        const dot = $("backendDot"), txt = $("backendStatus");
+        if (status === "online") {
+            dot.className = "led-dot led-online";
+            txt.textContent = "Backend: online";
+            txt.className = "text-emerald-400 font-mono text-sm";
+        } else if (status === "busy") {
+            dot.className = "led-dot led-busy";
+            txt.textContent = "Backend: busy";
+            txt.className = "text-amber-400 font-mono text-sm";
+        } else {
+            dot.className = "led-dot led-offline";
+            txt.textContent = "Backend: offline";
+            txt.className = "text-rose-400 font-mono text-sm";
+        }
+    }
+
+    function setEngine(name, status) {
+        const dot = $(`dot-${name}`), txt = $(`status-${name}`);
+        if (!dot || !txt) return;
+        if (status === "online") {
+            dot.className = "led-dot led-online";
+            txt.textContent = "ONLINE";
+            txt.className = "text-[10px] text-emerald-400 font-mono";
+        } else if (status === "busy") {
+            dot.className = "led-dot led-busy";
+            txt.textContent = "BUSY";
+            txt.className = "text-[10px] text-amber-400 font-mono";
+        } else {
+            dot.className = "led-dot led-offline";
+            txt.textContent = "OFFLINE";
+            txt.className = "text-[10px] text-rose-400 font-mono";
+        }
+    }
+
+    function lockMsg(t, kind = "info") {
+        const el = $("lockMsg");
+        el.textContent = t;
+        el.className = "text-xs mt-5 font-mono " +
+            (kind === "ok"  ? "text-emerald-400" :
+             kind === "err" ? "text-rose-400"    : "text-slate-500");
+    }
+
+    function setAuthStatus(t) {
+        let el = $("auth-status");
+        if (!el) el = $("lockMsg");
+        if (el) el.textContent = t;
+    }
+
+    function fakeHash(seed) {
+        const chars = "0123456789abcdef";
+        let out = "";
+        for (let i = 0; i < 64; i++) {
+            out += chars[Math.floor(((seed.charCodeAt(i % seed.length) || 0) + i * 7 + Date.now() * 13) % 16)];
+        }
+        return out;
+    }
+
+    // ---------- WEBAUTHN ----------
+    async function registerPasskey() {
+        if (!window.isSecureContext) {
+            lockMsg("HTTPS required for hardware security.", "err");
+            setAuthStatus("Insecure Context - Bypass Active");
+            await sleep(1000);
+            unlockDashboard();
+            return;
+        }
+
+        lockMsg("Generating passkey challenge…");
+        const challenge = crypto.getRandomValues(new Uint8Array(32));
+
+        const publicKey = {
+            challenge,
+            rp: { name: RP_NAME },
+            user: {
+                id: new TextEncoder().encode(USER_ID),
+                name: "operator@sentinelx",
+                displayName: "Sentinel Operator"
+            },
+            pubKeyCredParams: [
+                { type: "public-key", alg: -7 },   
+                { type: "public-key", alg: -257 }  
+            ],
+            authenticatorSelection: {
+                authenticatorAttachment: "platform",
+                userVerification: "required",
+                residentKey: "preferred"
+            },
+            timeout: 60000,
+            attestation: "none"
+        };
+
+        try {
+            const cred = await navigator.credentials.create({ publicKey });
+            if (!cred) throw new Error("No credential returned.");
+            const id = bytesToB64Url(cred.rawId);
+            localStorage.setItem(CRED_KEY, id);
+            lockMsg("✅ Passkey registered. Unlocking…", "ok");
+            setAuthStatus("Hardware verified");
+            await sleep(700);
+            unlockDashboard();
+        } catch (e) {
+            lockMsg("Hardware authentication failed or cancelled.", "err");
+            setAuthStatus("Authentication Error");
+        }
+    }
+
+    async function authenticatePasskey() {
+        if (!window.isSecureContext) {
+            lockMsg("HTTPS required for hardware security.", "err");
+            setAuthStatus("Insecure Context - Bypass Active");
+            await sleep(1000);
+            unlockDashboard();
+            return;
+        }
+
+        const stored = localStorage.getItem(CRED_KEY);
+        if (!stored) {
+            lockMsg("No passkey found on this device. Click 'Register' first.", "err");
+            return;
+        }
+        lockMsg("Awaiting biometric / device PIN…");
+        const challenge = crypto.getRandomValues(new Uint8Array(32));
+
+        const publicKey = {
+            challenge,
+            rpId: window.location.hostname || "127.0.0.1",
+            allowCredentials: [{
+                id: b64UrlToBytes(stored),
+                type: "public-key",
+                transports: ["internal"]
+            }],
+            userVerification: "required",
+            timeout: 60000
+        };
+
+        try {
+            const assertion = await navigator.credentials.get({ publicKey });
+            if (!assertion) throw new Error("No assertion returned.");
+            lockMsg("✅ Biometric verified. Access granted.", "ok");
+            setAuthStatus("Hardware verified");
+            await sleep(500);
+            unlockDashboard();
+        } catch (e) {
+            lockMsg("Hardware authentication failed or cancelled.", "err");
+            setAuthStatus("Authentication Error");
+        }
+    }
+
+    function bypassLock() {
+        const lock = $("lockScreen");
+        const dash = $("dashboard");
+        lock.classList.add("hidden");
+        dash.classList.remove("hidden", "opacity-20", "pointer-events-none");
+        setAuthStatus("Operator override · guard bypassed");
+        unlockDashboard();
+    }
+
+    function unlockDashboard() {
+        $("lockScreen").classList.add("hidden");
+        $("dashboard").classList.remove("hidden");
+        $("userLabel").textContent = "operator@sentinelx";
+        startClock();
+        refreshScore();
+        restoreLedger(); 
+        setInterval(refreshScore, 8000);
+    }
+
+    function startClock() {
+        const tick = () => { $("clock").textContent = new Date().toLocaleTimeString(); };
+        tick();
+        setInterval(tick, 1000);
+    }
+
+    function setGauge(value) {
+        const v = Math.max(0, Math.min(100, Number(value) || 0));
+        const C = 2 * Math.PI * 52;
+        const offset = C * (1 - v / 100);
+        const arc = $("gaugeArc");
+        arc.setAttribute("stroke-dashoffset", offset);
+        arc.setAttribute("stroke",
+            v >= 80 ? "#22c55e" : v >= 50 ? "#facc15" : "#f43f5e");
+        $("gaugeValue").textContent = Math.round(v);
+        $("gaugeLabel").textContent =
+            v >= 80 ? "Excellent — system hardened." :
+            v >= 50 ? "Moderate — review findings." :
+                       "At risk — take action now.";
+        $("gaugeLabel").className = "mt-4 text-sm " +
+            (v >= 80 ? "text-emerald-400" : v >= 50 ? "text-amber-400" : "text-rose-400");
+    }
+
+   async function refreshScore() {
+        // 1. Check if the backend is alive
+        try {
+            const r = await fetch("/api/health");
+            setBackend(r.ok ? "online" : "offline");
+        } catch {
+            setBackend("offline");
+        }
+
+        // 2. Calculate actual score from the local ledger history!
+        const saved = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
+        
+        let currentScore = 100; // Baseline perfect score
+        
+        // Loop backwards (oldest events first) to simulate real-time score recovery
+        for (let i = saved.length - 1; i >= 0; i--) {
+            const status = saved[i].status.toLowerCase();
+            
+            if (status.includes("threat") || status.includes("compromised")) {
+                currentScore -= 20; // Major deduction for active threats
+            } else if (status.includes("error")) {
+                currentScore -= 5;  // Minor deduction for engine API errors
+            } else if (status.includes("safe") || status.includes("strong") || status.includes("ok")) {
+                currentScore += 10; // Recovery bonus for clean scans
+            }
+            
+            // Lock the score between 0 and 100 after every single event
+            currentScore = Math.max(0, Math.min(100, currentScore));
+        }
+
+        // 3. Update the UI gauge
+        setGauge(currentScore);
+    }
+
+    async function pollBackendHealth() {
+        try {
+            const r = await fetch("/api/health", { method: "GET", cache: "no-store" });
+            if (r.ok) {
+                setBackend("online");
+                return true;
+            }
+            setBackend("offline");
+            return false;
+        } catch {
+            setBackend("offline");
+            return false;
+        }
+    }
+
+    // ---------- API CONNECTION FAILED RENDERER ----------
+    function showApiError(box, inputId, extraId, label) {
+        const closeBtn = `<button type="button" onclick="closeResult('${box.id}', '${inputId}', '${extraId}')" class="absolute top-2 right-2 p-1 text-slate-400 hover:text-white transition leading-none" title="Clear Result">✖</button>`;
+        box.classList.remove("hidden");
+        box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
+        box.innerHTML = closeBtn + `❌ <strong>API CONNECTION FAILED</strong><br><span class="text-xs text-rose-300/80">The ${label} engine is currently unreachable. Check server logs.</span>`;
+    }
+
+    // ============================================================
+    // 1) scanUrl()
+    // ============================================================
+    async function scanUrl() {
+        const url = $("urlInput").value.trim();
+        const box = $("urlResult");
+        if (!url) { alert("Enter a URL first."); return; }
+
+        const closeBtn = `<button type="button" onclick="closeResult('urlResult', 'urlInput')" class="absolute top-2 right-2 p-1 text-slate-400 hover:text-white transition leading-none" title="Clear Result">✖</button>`;
+
+        setBackend("busy");
+        setEngine("phishing", "busy");
+        box.classList.remove("hidden");
+        box.className = "mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono text-cyan-200 relative pr-8";
+        box.innerHTML = closeBtn + "⏳ ANALYZING...";
+
+        try {
+            const response = await fetch("/api/scan-url", {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: url })
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
+            const isThreat = Boolean(data.is_threat ?? data.is_phishing ?? ((data.risk_score ?? data.phishing_risk_percent ?? 0) >= 70));
+            const risk = Number(data.risk_score ?? parseFloat(String(data.phishing_risk_percent ?? "0").replace("%","")) ?? 0);
+
+            if (isThreat) {
+                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
+                box.innerHTML = closeBtn + `
+                    <div><strong>Status:</strong> 🚨 THREAT DETECTED</div>
+                    <div><strong>URL:</strong> ${url}</div>
+                    <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
+                    <div class="text-xs text-rose-300/80 mt-1">${data.reason || data.status || "Phishing signal confirmed."}</div>`;
+            } else {
+                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
+                box.innerHTML = closeBtn + `
+                    <div><strong>Status:</strong> ✅ SAFE</div>
+                    <div><strong>URL:</strong> ${url}</div>
+                    <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
+                    <div class="text-xs text-emerald-300/80 mt-1">${data.reason || data.status || "No phishing indicators found."}</div>`;
+            }
+
+            if (isThreat) triggerMitigation("phishing", { url, risk, ...data });
+            logLedger("phishing", isThreat ? "THREAT" : "SAFE");
+            setEngine("phishing", "online");
+            setBackend("online");
+        } catch (err) {
+            showApiError(box, 'urlInput', null, "Phishing");
+            logLedger("phishing", "API ERROR");
+            setEngine("phishing", "offline");
+            setBackend("offline");
+        }
+    }
+
+    // ============================================================
+    // 2) handleFileUpload()
+    // ============================================================
+    async function handleFileUpload(event) {
+        event.preventDefault();
+        const input = $("imageInput");
+        const file = (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]) || (input.files && input.files[0]) || null;
+        const box = $("imageResult");
+        if (!file) return;
+
+        if (event.dataTransfer && event.dataTransfer.files[0]) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+        }
+        $("fileName").textContent = file.name;
+
+        const closeBtn = `<button type="button" onclick="closeResult('imageResult', 'imageInput', 'fileName')" class="absolute top-2 right-2 p-1 text-slate-400 hover:text-white transition leading-none" title="Clear Result">✖</button>`;
+
+        setBackend("busy");
+        setEngine("deepfake", "busy");
+        box.classList.remove("hidden");
+        box.className = "mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono text-purple-200 relative pr-8";
+        box.innerHTML = closeBtn + "⏳ ANALYZING IMAGE...";
+
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const response = await fetch("/api/scan-image", { method: "POST", body: formData });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
+            const fakePct = Number(data.fake_confidence ?? data.fake ?? data.deepfake_probability ?? 0);
+            const realPct = Number(data.real_confidence ?? data.real ?? (100 - fakePct));
+            const isDeepfake = Boolean(data.is_fake ?? data.is_deepfake ?? (fakePct >= 50));
+
+            // Generate the HTML for the bullet points
+            const signsHtml = (data.signs || []).map(sign => `<li class="ml-4 list-disc text-[11px] text-slate-400 mt-0.5">${sign}</li>`).join("");
+
+            if (isDeepfake) {
+                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
+                box.innerHTML = closeBtn + `
+                    <div><strong>Result:</strong> 🚨 DEEPFAKE DETECTED</div>
+                    <div><strong>File:</strong> ${file.name}</div>
+                    <div><strong>Deepfake Probability:</strong> ${fakePct.toFixed(1)}%</div>
+                    <div class="w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2">
+                        <div class="h-full bg-rose-400" style="width:${Math.min(100, fakePct)}%"></div>
+                    </div>
+                    <div class="mt-2 text-xs text-slate-300 border-t border-rose-500/30 pt-2">
+                        <span class="font-bold text-cyan-400">Analysis:</span> ${data.reason || "Generative artifacts detected."}
+                        <ul class="mt-2 text-slate-400">
+                            ${signsHtml}
+                        </ul>
+                    </div>`;
+            } else {
+                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
+                box.innerHTML = closeBtn + `
+                    <div><strong>Result:</strong> ✅ AUTHENTIC</div>
+                    <div><strong>File:</strong> ${file.name}</div>
+                    <div><strong>Deepfake Probability:</strong> ${fakePct.toFixed(1)}%</div>
+                    <div><strong>Real Confidence:</strong> ${realPct.toFixed(1)}%</div>
+                    <div class="w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2">
+                        <div class="h-full bg-emerald-400" style="width:${Math.min(100, realPct)}%"></div>
+                    </div>
+                    <div class="mt-2 text-xs text-slate-300 border-t border-emerald-500/30 pt-2">
+                        <span class="font-bold text-cyan-400">Analysis:</span> ${data.reason || "No synthetic anomalies found."}
+                        <ul class="mt-2 text-slate-400">
+                            ${signsHtml}
+                        </ul>
+                    </div>`;
+            }
+
+            if (isDeepfake) triggerMitigation("deepfake", { filename: file.name, probability: fakePct, ...data });
+            logLedger("deepfake", isDeepfake ? "THREAT" : "SAFE");
+            setEngine("deepfake", "online");
+            setBackend("online");
+        } catch (err) {
+            showApiError(box, 'imageInput', 'fileName', "Deepfake");
+            logLedger("deepfake", "API ERROR");
+            setEngine("deepfake", "offline");
+            setBackend("offline");
+        }
+    }
+
+    // ============================================================
+    // 3) checkPassword()
+    // ============================================================
+    async function checkPassword() {
+        const pw = $("passwordInput").value;
+        const box = $("passwordResult");
+        if (!pw) { alert("Type a password first."); return; }
+
+        const closeBtn = `<button type="button" onclick="closeResult('passwordResult', 'passwordInput')" class="absolute top-2 right-2 p-1 text-slate-400 hover:text-white transition leading-none" title="Clear Result">✖</button>`;
+
+        setBackend("busy");
+        setEngine("password", "busy");
+        box.classList.remove("hidden");
+        box.className = "mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono text-emerald-200 relative pr-8";
+        box.innerHTML = closeBtn + "⏳ ANALYZING PASSWORD...";
+
+        try {
+            const response = await fetch("/api/check-password", {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pw })
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+
+            const breachCount = Number(data.breach_count ?? data.pwned_count ?? 0);
+            const strength = Number(data.strength ?? 0);
+            const isCompromised = Boolean(data.is_breached ?? data.is_compromised ?? breachCount > 0);
+
+            if (isCompromised || strength < 50) {
+                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
+                box.innerHTML = closeBtn + `
+                    <div><strong>Status:</strong> 🚨 ${data.status || "WEAK / COMPROMISED"}</div>
+                    <div><strong>Strength:</strong> ${strength}/100</div>
+                    <div><strong>Breach History:</strong> Found in ${breachCount.toLocaleString()} known breaches</div>
+                    <div class="text-xs text-rose-300/80 mt-1">${data.suggestion || "Rotate this password immediately."}</div>`;
+            } else {
+                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
+                box.innerHTML = closeBtn + `
+                    <div><strong>Status:</strong> ✅ ${data.status || "STRONG"}</div>
+                    <div><strong>Strength:</strong> ${strength}/100</div>
+                    <div><strong>Breach History:</strong> 0 known breaches</div>
+                    <div class="text-xs text-emerald-300/80 mt-1">${data.suggestion || "Password looks strong."}</div>`;
+            }
+
+            if (isCompromised) triggerMitigation("weak_password", { length: pw.length, breachCount, strength, ...data });
+            logLedger("password", isCompromised ? "COMPROMISED" : (strength >= 80 ? "STRONG" : "OK"));
+            setEngine("password", "online");
+            setBackend("online");
+        } catch (err) {
+            showApiError(box, 'passwordInput', null, "Password");
+            logLedger("password", "API ERROR");
+            setEngine("password", "offline");
+            setBackend("offline");
+        }
+    }
+
+    function togglePassword() {
+        const i = $("passwordInput");
+        i.type = i.type === "password" ? "text" : "password";
+    }
+
+    // ============================================================
+    // 4) triggerMitigation() - Deep Context-Aware Upgrades
+    // ============================================================
+    async function triggerMitigation(threatType, details) {
+        const panel = $("expertPanel");
+        const status = $("expertStatus");
+        status.textContent = "analyzing context...";
+
+        const risk = Number(details.risk_score ?? details.risk ?? details.probability ?? 70);
+        const severity = risk >= 85 ? "critical" : risk >= 65 ? "high" : risk >= 35 ? "medium" : "low";
+        const sevClass = `sev-${severity}`;
+
+        let dynamicSteps = [];
+
+        if (threatType === "phishing") {
+            const url = details.url || "the flagged domain";
+            const reason = details.reason || details.status || "Heuristic threat patterns detected";
+            dynamicSteps = [
+                { title: "Network Isolation & Triage", detail: `Immediately block outbound connections to <span class="text-cyan-400 font-mono bg-cyber-900 px-1.5 py-0.5 rounded break-all">${url}</span> at the firewall/DNS level.` },
+                { title: "Threat Eradication", detail: `The scanner identified a <span class="text-rose-400 font-mono font-bold">${risk.toFixed(1)}%</span> risk score. Signal triggers: <span class="text-amber-400 italic">${reason}</span>. Purge browser cache, cookies, and active session tokens on the affected endpoint.` },
+                { title: "Credential Verification", detail: "If any operator interacted with this URL, force an immediate zero-trust password rotation and verify hardware MFA keys." }
+            ];
+        } else if (threatType === "deepfake") {
+            const file = details.filename || "the uploaded asset";
+            const conf = Number(details.fake_confidence || details.probability || risk).toFixed(1);
+            const pipeline = details.analyzed_via || "Neural Tensor + Compression ELA";
+            dynamicSteps = [
+                { title: "Digital Quarantine", detail: `Halt internal distribution of <span class="text-purple-400 font-mono bg-cyber-900 px-1.5 py-0.5 rounded break-all">${file}</span>. Move the asset to an isolated forensic vault.` },
+                { title: "Forensic Analysis Breakdown", detail: `The pipeline (<span class="text-slate-400 font-mono text-[10px]">${pipeline}</span>) identified synthetic manipulation with <span class="text-rose-400 font-mono font-bold">${conf}%</span> confidence. High-frequency noise residuals match generative AI signatures.` },
+                { title: "Identity Verification", detail: "Do not trust the visual/audio claims in this media. Re-establish contact with the supposed entity via an out-of-band, cryptographically verified channel." }
+            ];
+        } else if (threatType === "weak_password") {
+            const breaches = details.breach_count || 0;
+            const str = details.strength || 0;
+            const hint = details.suggestion || "Requires higher entropy.";
+            dynamicSteps = [
+                { title: "Immediate Secret Revocation", detail: `This exact string has appeared in <span class="text-rose-400 font-mono font-bold">${breaches.toLocaleString()}</span> known data breaches across the clear and dark web. It is actively being targeted in credential stuffing attacks.` },
+                { title: "Complexity Audit", detail: `Current cryptographic strength is critically low (<span class="text-amber-400 font-mono font-bold">${str}/100</span>). Engine recommendation: <span class="text-emerald-400 italic">${hint}</span>` },
+                { title: "Zero-Knowledge Implementation", detail: "Generate a 16+ character high-entropy passphrase via a zero-knowledge Password Manager. Enforce FIDO2/WebAuthn hardware keys for future authentication." }
+            ];
+        } else {
+            dynamicSteps = [
+                { title: "Isolate Target", detail: `Quarantine the affected asset exhibiting a <span class="text-rose-400 font-mono">${risk.toFixed(1)}%</span> risk profile.` },
+                { title: "Eradicate Threat", detail: "Remove malicious artifacts and cycle all active operator session tokens." },
+                { title: "System Recovery", detail: "Restore baseline operations from a verified SHA-256 backup state." }
+            ];
+        }
+
+        const planHtml = `
+            <div class="mb-4 flex items-center justify-between">
+                <div>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-widest">Threat Vector</p>
+                    <p class="text-sm font-semibold text-cyan-200">${threatType.toUpperCase()}</p>
+                </div>
+                <span class="px-2.5 py-1 rounded text-[10px] font-mono uppercase ${sevClass} shadow-sm">${severity}</span>
+            </div>
+            <ol class="space-y-3">
+                ${dynamicSteps.map((s, i) => `
+                    <li class="p-3.5 rounded-lg bg-cyber-800/40 border border-slate-700/50 shadow-inner">
+                        <div class="flex items-start gap-3">
+                            <div class="w-6 h-6 rounded bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                                <span class="text-purple-400 font-mono text-xs">${i+1}</span>
+                            </div>
+                            <div>
+                                <p class="text-sm font-semibold text-slate-200">${s.title}</p>
+                                <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">${s.detail}</p>
+                            </div>
+                        </div>
+                    </li>`).join("")}
+            </ol>
+            <p class="mt-4 text-[10px] text-slate-500 font-mono border-t border-slate-800 pt-2">Generated by Context-Aware Engine · ${new Date().toLocaleTimeString()}</p>
+        `;
+        
+        panel.innerHTML = planHtml;
+        status.textContent = "context loaded";
+
+        setEngine("llm", "busy");
+        try {
+            const r = await fetch("/api/mitigate", {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threat_type: threatType, risk_score: risk, details })
+            });
+            if (r.ok) {
+                const d = await r.json();
+                if (d && Array.isArray(d.steps) && d.steps.length && d.source === "llm") {
+                    const llmHtml = `
+                        <div class="mb-4 flex items-center justify-between">
+                            <div>
+                                <p class="text-[10px] text-slate-500 uppercase tracking-widest">Threat Vector</p>
+                                <p class="text-sm font-semibold text-cyan-200">${(d.threat_type || threatType).toUpperCase()}</p>
+                            </div>
+                            <span class="px-2.5 py-1 rounded text-[10px] font-mono uppercase ${`sev-${d.severity || severity}`} shadow-sm">${d.severity || severity}</span>
+                        </div>
+                        <ol class="space-y-3">
+                            ${d.steps.slice(0, 3).map((s, i) => `
+                                <li class="p-3.5 rounded-lg bg-cyber-800/40 border border-slate-700/50 shadow-inner">
+                                    <div class="flex items-start gap-3">
+                                        <div class="w-6 h-6 rounded bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                                            <span class="text-purple-400 font-mono text-xs">${i+1}</span>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-200">${s.title || s.name || ("Step " + (i+1))}</p>
+                                            <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">${s.detail || s.description || ""}</p>
+                                        </div>
+                                    </div>
+                                </li>`).join("")}
+                        </ol>
+                        <p class="mt-4 text-[10px] text-slate-500 font-mono border-t border-slate-800 pt-2">Llama-3 (Ollama) · ${new Date().toLocaleTimeString()} · source: ${d.source || "llm"}</p>
+                    `;
+                    panel.innerHTML = llmHtml;
+                    setEngine("llm", "online");
+                } else {
+                    setEngine("llm", "offline");
+                }
+            } else {
+                setEngine("llm", "offline");
+            }
+        } catch {
+            setEngine("llm", "offline");
+        }
+    }
+
+    // ============================================================
+    // 5) logLedger() - Now with LocalStorage Persistence
+    // ============================================================
+    function logLedger(vector, status) {
+        const tbody = $("ledgerBody");
+        const placeholder = tbody.querySelector("td.italic, td[class*='italic']");
+        if (placeholder) tbody.innerHTML = "";
+
+        const hash = fakeHash(vector + Date.now() + Math.random());
+        const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
+        const okish = (status || "").toLowerCase().match(/safe|ok|strong|verified/);
+        const color = okish ? "text-emerald-400" : "text-rose-400";
+
+        // --- NEW: Save to Local Browser Storage ---
+        const saved = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
+        saved.unshift({ ts, vector, hash, status, color });
+        if (saved.length > 25) saved.length = 25; // keep max 25 rows
+        localStorage.setItem("sentinel_ledger", JSON.stringify(saved));
+        // ------------------------------------------
+
+        const newRow = document.createElement("tr");
+        newRow.className = "border-b border-slate-800 row-flash";
+        newRow.innerHTML = `
+            <td class="py-2 pl-2 pr-3 text-slate-500">1</td>
+            <td class="py-2 pr-3 text-slate-300">${ts}</td>
+            <td class="py-2 pr-3 text-cyan-300 uppercase">${vector}</td>
+            <td class="py-2 pr-3 text-slate-400 truncate max-w-[260px]" title="${hash}">${hash}</td>
+            <td class="py-2 ${color}">${status}</td>
+        `;
+        tbody.insertBefore(newRow, tbody.firstChild);
+        
+        Array.from(tbody.querySelectorAll("tr")).forEach((tr, i) => {
+            const cell = tr.querySelector("td");
+            if (cell) cell.textContent = (i + 1);
+        });
+        while (tbody.children.length > 25) tbody.removeChild(tbody.lastChild);
+    }
+    // ============================================================
+    // 6) restoreLedger() - Rebuilds table on page refresh
+    // ============================================================
+    function restoreLedger() {
+        const saved = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
+        if (!saved.length) return; // If empty, leave the default placeholder
+
+        const tbody = $("ledgerBody");
+        tbody.innerHTML = ""; 
+        
+        saved.forEach((entry, i) => {
+            const newRow = document.createElement("tr");
+            newRow.className = "border-b border-slate-800"; // Notice: No flash animation on load
+            newRow.innerHTML = `
+                <td class="py-2 pl-2 pr-3 text-slate-500">${i + 1}</td>
+                <td class="py-2 pr-3 text-slate-300">${entry.ts}</td>
+                <td class="py-2 pr-3 text-cyan-300 uppercase">${entry.vector}</td>
+                <td class="py-2 pr-3 text-slate-400 truncate max-w-[260px]" title="${entry.hash}">${entry.hash}</td>
+                <td class="py-2 ${entry.color}">${entry.status}</td>
+            `;
+            tbody.appendChild(newRow);
+        });
+    }
+
+    // ---------- DRAG & DROP WIRING ----------
+    function wireDropZone() {
+        const dz = $("dropZone"), input = $("imageInput");
+        dz.addEventListener("click", (e) => { if (e.target.tagName !== "INPUT") input.click(); });
+        ["dragenter","dragover"].forEach(ev => dz.addEventListener(ev, e => {
+            e.preventDefault(); e.stopPropagation(); dz.classList.add("drag-over");
+        }));
+        ["dragleave","drop"].forEach(ev => dz.addEventListener(ev, e => {
+            e.preventDefault(); e.stopPropagation(); dz.classList.remove("drag-over");
+        }));
+        dz.addEventListener("drop", e => handleFileUpload(e));
+        input.addEventListener("change", e => handleFileUpload(e));
+    }
+
+    // ============================================================
+    // 7) AI Security Chatbot Logic
+    // ============================================================
+    function toggleChat() {
+        const chat = $("chatWindow");
+        chat.classList.toggle("hidden");
+        if (!chat.classList.contains("hidden")) {
+            $("chatInput").focus();
+        }
+    }
+
+    let isChatProcessing = false;
+
+    async function sendChatMessage() {
+        if (isChatProcessing) return; 
+
+        const input = $("chatInput");
+        const btn = $("chatSendBtn");
+        const msg = input.value.trim();
+        if (!msg) return;
+
+        const chatMessages = $("chatMessages");
+
+        // ✨ NEW: Grab the actual dashboard logs from local storage!
+        const savedLogs = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
+
+        isChatProcessing = true;
+        input.disabled = true;
+        btn.disabled = true;
+
+        const userHtml = `
+            <div class="flex gap-3 justify-end">
+                <div class="bg-cyan-500/10 border border-cyan-500/30 p-3 rounded-lg rounded-tr-none text-xs text-cyan-100 leading-relaxed shadow-sm max-w-[85%]">
+                    ${msg}
+                </div>
+            </div>`;
+        chatMessages.insertAdjacentHTML("beforeend", userHtml);
+        input.value = "";
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        const typingId = "typing-" + Date.now();
+        const typingHtml = `
+            <div id="${typingId}" class="flex gap-3">
+                <div class="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center shrink-0">🤖</div>
+                <div class="bg-cyber-800 border border-slate-700 p-3 rounded-lg rounded-tl-none text-xs text-slate-500 italic shadow-sm">
+                    <span class="led-dot led-busy"></span> Analyzing Logs...
+                </div>
+            </div>`;
+        chatMessages.insertAdjacentHTML("beforeend", typingHtml);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        try {
+            const r = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    message: msg,
+                    logs: savedLogs  // ✨ NEW: Sending the internal connection data
+                })
+            });
+            
+            $(typingId).remove();
+
+            if (r.ok) {
+                const d = await r.json();
+                appendAiResponse(d.reply || "I am currently unable to process that request.");
+            } else {
+                appendAiResponse("Connection error. The backend is unreachable.");
+            }
+        } catch {
+            $(typingId).remove();
+            appendAiResponse("System offline. Please ensure the backend is running.");
+        } finally {
+            isChatProcessing = false;
+            input.disabled = false;
+            btn.disabled = false;
+            input.focus();
+        }
+    }
+
+    function appendAiResponse(text) {
+        const chatMessages = $("chatMessages");
+        const aiHtml = `
+            <div class="flex gap-3">
+                <div class="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center shrink-0">🤖</div>
+                <div class="bg-cyber-800 border border-slate-700 p-3 rounded-lg rounded-tl-none text-xs text-slate-300 leading-relaxed shadow-sm">
+                    ${text}
+                </div>
+            </div>`;
+        chatMessages.insertAdjacentHTML("beforeend", aiHtml);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // ---------- INIT ----------
+    $("registerBtn").addEventListener("click", registerPasskey);
+    $("unlockBtn").addEventListener("click", authenticatePasskey);
+    wireDropZone();
+
+    if (!window.isSecureContext) {
+        lockMsg("Non-HTTPS origin detected: Hardware security requires secure context.", "err");
+        setAuthStatus("Hardware security bypassed (Insecure Context)");
+        setTimeout(() => unlockDashboard(), 1200);
+    } else if (localStorage.getItem(CRED_KEY) &&
+               window.PublicKeyCredential &&
+               navigator.credentials && navigator.credentials.get) {
+        lockMsg("Existing passkey detected — verifying…");
+        authenticatePasskey();
+    } else {
+        lockMsg("Click 'Authenticate' to unlock with biometrics.");
+    }
+    </script>
+</body>
+</html>
