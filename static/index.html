@@ -404,7 +404,7 @@
     <!-- =================== JAVASCRIPT =================== -->
     <script>
     // ---------- CONFIG ----------
-    const API = ""; 
+    const API = "https://sentinel-x.onrender.com"; // ✨ Set to your Render URL
     const RP_NAME = "Sentinel X";
     const USER_ID = "sentinel-operator-001";
     const CRED_KEY = "sentinel_x_passkey_id";
@@ -652,7 +652,7 @@
    async function refreshScore() {
         // 1. Check if the backend is alive
         try {
-            const r = await fetch("/api/health");
+            const r = await fetch(`${API}/api/health`); // ✨ Updated
             setBackend(r.ok ? "online" : "offline");
         } catch {
             setBackend("offline");
@@ -685,7 +685,7 @@
 
     async function pollBackendHealth() {
         try {
-            const r = await fetch("/api/health", { method: "GET", cache: "no-store" });
+            const r = await fetch(`${API}/api/health`, { method: "GET", cache: "no-store" }); // ✨ Updated
             if (r.ok) {
                 setBackend("online");
                 return true;
@@ -723,7 +723,7 @@
         box.innerHTML = closeBtn + "⏳ ANALYZING...";
 
         try {
-            const response = await fetch("/api/scan-url", {
+            const response = await fetch(`${API}/api/scan-url`, { // ✨ Updated
                 method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: url })
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -789,7 +789,7 @@
             const formData = new FormData();
             formData.append("file", file);
 
-            const response = await fetch("/api/scan-image", { method: "POST", body: formData });
+            const response = await fetch(`${API}/api/scan-image`, { method: "POST", body: formData }); // ✨ Updated
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
@@ -862,7 +862,7 @@
         box.innerHTML = closeBtn + "⏳ ANALYZING PASSWORD...";
 
         try {
-            const response = await fetch("/api/check-password", {
+            const response = await fetch(`${API}/api/check-password`, { // ✨ Updated
                 method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pw })
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -983,7 +983,7 @@
 
         setEngine("llm", "busy");
         try {
-            const r = await fetch("/api/mitigate", {
+            const r = await fetch(`${API}/api/mitigate`, { // ✨ Updated
                 method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threat_type: threatType, risk_score: risk, details })
             });
             if (r.ok) {
@@ -1153,7 +1153,7 @@
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
         try {
-            const r = await fetch("/api/chat", {
+            const r = await fetch(`${API}/api/chat`, { // ✨ Updated
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
