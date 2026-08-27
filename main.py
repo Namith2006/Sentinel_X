@@ -216,11 +216,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Sentinel X API", version="2.0", lifespan=lifespan)
 
-# CORS — allow any origin during demo / local development
+# 1. Enable CORS so Vercel can talk to Render
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,            # wildcard origins can't use credentials
+    allow_origins=["*"],  # Allows all domains (including your Vercel URL)
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
