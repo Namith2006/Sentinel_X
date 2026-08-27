@@ -279,6 +279,23 @@ def _normalize_phishing(raw: dict, url: str) -> dict:
 
 def _normalize_image(raw: dict, filename: str) -> dict:
     """Map the deepfake engine output to the field names the dashboard expects."""
+    
+    # 1. IMMEDIATE ERROR CHECK (Intercepts the silent failure)
+    if raw.get("error"):
+        return {
+            "filename": filename,
+            "is_fake": False,
+            "fake_confidence": "0.00",
+            "real_confidence": "0.00",
+            "risk_score": 0.0,
+            "status": "API ERROR",
+            "reason": raw.get("reason", "An unknown API error occurred."),
+            "signs": raw.get("signs", ["Check Render server logs."]),
+            "analyzed_via": "Error Handler",
+            "details": raw,
+        }
+
+    # 2. NORMAL SUCCESS LOGIC
     fake_text = str(raw.get("fake_confidence", "0%")).rstrip("%")
     real_text = str(raw.get("real_confidence", "0%")).rstrip("%")
     try:
@@ -300,7 +317,7 @@ def _normalize_image(raw: dict, filename: str) -> dict:
     is_fake = bool(raw.get("is_fake", fake_score >= threshold))
     verdict = "fake" if is_fake else "real"
 
-    # --- NEW: Generate Explainable AI Reason & Signs ---
+    # Generate Explainable AI Reason & Signs
     signs = []
     if is_fake:
         if threshold == 40.0:
@@ -333,12 +350,10 @@ def _normalize_image(raw: dict, filename: str) -> dict:
         "risk_score": fake_score, 
         "status": verdict.upper(),
         "reason": reason, 
-        "signs": signs,  # <-- Added the signs list here
+        "signs": signs,  
         "analyzed_via": raw.get("analyzed_via", f"Neural Tensor + Compression ELA (Threshold: {threshold}%)"),
         "details": raw,
     }
-
-
 # --- SCREENSHOT HEURISTIC ---
 SCREENSHOT_KEYWORDS = [
     "screenshot", "screen", "capture", "snip", "desktop", "display",
