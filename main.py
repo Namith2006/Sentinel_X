@@ -57,7 +57,6 @@ def _persist_ledger() -> None:
         with open(LEDGER_FILE, "w", encoding="utf-8") as fh:
             json.dump(ledger.chain, fh, indent=2)
     except Exception:
-        # Persistence is a nice-to-have, never a hard failure
         pass
 
 
@@ -88,26 +87,17 @@ def log_event(threat_type: str, risk_score: float, details: dict) -> str:
 # Dynamic Security Score
 # ------------------------------------------------------------------------
 def compute_security_score() -> int:
-    """
-    Derive a 0-100 device security score from ledger history.
-
-    Starts at 100 and subtracts weighted penalties for recent malicious
-    activity, with a floor of 0. Items older than 24h contribute less.
-    """
     base = 100.0
     now = datetime.now()
 
-    # Ignore the genesis block (no real event)
     events = ledger.chain[1:] if len(ledger.chain) > 1 else []
     if not events:
-        return 88  # healthy baseline when nothing has been scanned yet
+        return 88  
 
     for block in events:
         risk = float(block.get("risk_score", 0) or 0)
-        # Weight: high risk counts more, capped at 25 points per event
         penalty = min(risk * 25.0, 25.0)
 
-        # Recency decay — events from the last hour matter most
         try:
             ts = datetime.fromisoformat(str(block.get("timestamp", "")))
             age_hours = max(0.0, (now - ts).total_seconds() / 3600.0)
@@ -132,7 +122,6 @@ COMMON_PASSWORDS = {
 
 
 def password_entropy_bits(password: str) -> float:
-    """Shannon-style entropy estimate based on the active character pool."""
     if not password:
         return 0.0
     pool = 0
@@ -142,39 +131,24 @@ def password_entropy_bits(password: str) -> float:
     if re.search(r"[^A-Za-z0-9]", password): pool += 33
     if pool == 0:
         return 0.0
-    # log2(pool) * length
     return len(password) * math.log2(pool)
 
 
 def password_complexity_score(password: str) -> int:
-    """Return a 0-100 complexity score from length + diversity + entropy."""
     if not password:
         return 0
-
     length = len(password)
     entropy = password_entropy_bits(password)
-
-    # Length component (0-40 pts)
     length_pts = min(40, length * 3)
-
-    # Diversity component (0-30 pts)
     classes = sum(bool(re.search(p, password))
                   for p in [r"[a-z]", r"[A-Z]", r"[0-9]", r"[^A-Za-z0-9]"])
     diversity_pts = classes * 7.5
-
-    # Entropy component (0-30 pts) — 80+ bits = full marks
     entropy_pts = min(30.0, entropy / 80.0 * 30.0)
-
     total = length_pts + diversity_pts + entropy_pts
     return max(0, min(100, int(round(total))))
 
 
 def hibp_pwned_count(password: str) -> int:
-    """
-    Query HaveIBeenPwned's k-Anonymity range API.
-    Sends only the first 5 hex chars of SHA-1(password); the cleartext never
-    leaves the device. Returns the breach count (0 if safe or network error).
-    """
     try:
         sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
         prefix, suffix = sha1[:5], sha1[5:]
@@ -191,7 +165,7 @@ def hibp_pwned_count(password: str) -> int:
                 return int(count.strip())
         return 0
     except Exception:
-        return 0  # network errors degrade to "unknown" rather than failing
+        return 0 
 
 
 def password_strength_label(score: int, breached: bool, common: bool) -> str:
@@ -208,7 +182,6 @@ def password_strength_label(score: int, breached: bool, common: bool) -> str:
 # ------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Seed the ledger with a synthetic starting point if it only has genesis
     if len(ledger.chain) <= 1:
         log_event("system", 0.05, {"event": "Backend online — ledger initialized"})
     yield
@@ -216,16 +189,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Sentinel X API", version="2.0", lifespan=lifespan)
 
-# 1. Enable CORS so Vercel can talk to Render
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all domains (including your Vercel URL)
-    allow_credentials=False, # MUST BE FALSE WHEN ORIGINS IS ["*"]
+    allow_origins=["*"],  
+    allow_credentials=False, 
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Web Deployment: Mount the static directory for index.html
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -240,7 +211,6 @@ class ChatRequest(BaseModel):
 # Helpers
 # ------------------------------------------------------------------------
 def _coerce_url_payload(payload: dict | None, form_url: str | None) -> str:
-    """Pull the URL out of either JSON body or FormData."""
     if payload and isinstance(payload, dict) and payload.get("url"):
         return str(payload["url"]).strip()
     if form_url:
@@ -249,7 +219,6 @@ def _coerce_url_payload(payload: dict | None, form_url: str | None) -> str:
 
 
 def _normalize_phishing(raw: dict, url: str) -> dict:
-    """Map the engine output to the field names the dashboard expects."""
     is_phishing = bool(raw.get("is_phishing"))
     risk_text = str(raw.get("phishing_risk_percent", "0%")).rstrip("%")
     try:
@@ -280,7 +249,7 @@ def _normalize_phishing(raw: dict, url: str) -> dict:
 def _normalize_image(raw: dict, filename: str) -> dict:
     """Map the deepfake engine output to the field names the dashboard expects."""
     
-    # 1. IMMEDIATE ERROR CHECK (Intercepts the silent failure)
+    # --- CRITICAL FIX: INTERCEPT API ERRORS ---
     if raw.get("error"):
         return {
             "filename": filename,
@@ -288,14 +257,14 @@ def _normalize_image(raw: dict, filename: str) -> dict:
             "fake_confidence": "0.00",
             "real_confidence": "0.00",
             "risk_score": 0.0,
-            "status": "API ERROR",
-            "reason": raw.get("reason", "An unknown API error occurred."),
-            "signs": raw.get("signs", ["Check Render server logs."]),
+            "status": "SYSTEM MESSAGE",
+            "reason": raw.get("reason", "An unknown cloud API error occurred."),
+            "signs": ["Please check server connection.", "Awaiting AI activation."],
             "analyzed_via": "Error Handler",
             "details": raw,
         }
 
-    # 2. NORMAL SUCCESS LOGIC
+    # --- NORMAL SUCCESS LOGIC ---
     fake_text = str(raw.get("fake_confidence", "0%")).rstrip("%")
     real_text = str(raw.get("real_confidence", "0%")).rstrip("%")
     try:
@@ -307,7 +276,6 @@ def _normalize_image(raw: dict, filename: str) -> dict:
     except ValueError:
         real_score = 100.0 - fake_score
 
-    # Apply dynamic thresholding for heavily compressed messaging media
     lowered_filename = filename.lower()
     if "whatsapp" in lowered_filename or "telegram" in lowered_filename:
         threshold = 40.0
@@ -317,7 +285,6 @@ def _normalize_image(raw: dict, filename: str) -> dict:
     is_fake = bool(raw.get("is_fake", fake_score >= threshold))
     verdict = "fake" if is_fake else "real"
 
-    # Generate Explainable AI Reason & Signs
     signs = []
     if is_fake:
         if threshold == 40.0:
@@ -354,13 +321,14 @@ def _normalize_image(raw: dict, filename: str) -> dict:
         "analyzed_via": raw.get("analyzed_via", f"Neural Tensor + Compression ELA (Threshold: {threshold}%)"),
         "details": raw,
     }
+
+
 # --- SCREENSHOT HEURISTIC ---
 SCREENSHOT_KEYWORDS = [
     "screenshot", "screen", "capture", "snip", "desktop", "display",
 ]
 SCREENSHOT_FAKE_CAP = 29.99
 SCREENSHOT_REASON = "SAFE (UI Screenshot Verified)"
-
 
 def _looks_like_screenshot(filename: str) -> str | None:
     if not filename:
@@ -377,13 +345,10 @@ def _looks_like_screenshot(filename: str) -> str | None:
 
 @app.get("/")
 def root():
-    """Serve the bundled Sentinel X dashboard."""
     return FileResponse("static/index.html")
-
 
 @app.get("/api/health")
 def api_health():
-    """Lightweight health probe used by the dashboard's status indicator."""
     return {"status": "online", "service": "sentinel-x", "version": app.version}
 
 
@@ -649,7 +614,6 @@ async def security_copilot_chat(request: Request):
     user_message = data.get("message", "").strip()
     user_logs = data.get("logs", [])
 
-    # Process all available ledger logs (up to 25)
     log_summary_lines = []
     threat_count = 0
     safe_count = 0
@@ -675,7 +639,6 @@ async def security_copilot_chat(request: Request):
     else:
         log_context = "No system logs recorded yet."
 
-    # Instant shortcut for basic greetings
     if user_message.lower() in {"hi", "hello", "hey", "help"}:
         return {"reply": "Operator online. How can I assist with your security analysis?"}
 
@@ -703,7 +666,7 @@ async def security_copilot_chat(request: Request):
                 },
                 {"role": "user", "content": user_message}
             ],
-            "max_tokens": 750,  # Expanded to prevent mid-sentence cutoff
+            "max_tokens": 750,  
             "temperature": 0.3
         }
 
@@ -724,6 +687,7 @@ async def security_copilot_chat(request: Request):
         return {"reply": "⏳ Request timed out. Please check your network connection."}
     except Exception as e:
         return {"reply": f"⚠️ Internal Error: {str(e)}"}
+
 
 @app.get("/api/score")
 def api_score():
