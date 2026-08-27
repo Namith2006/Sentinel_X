@@ -276,11 +276,14 @@ def _normalize_image(raw: dict, filename: str) -> dict:
     except ValueError:
         real_score = 100.0 - fake_score
 
+    # Adjusted threshold to account for open-source model concept drift on modern AI generators
     lowered_filename = filename.lower()
     if "whatsapp" in lowered_filename or "telegram" in lowered_filename:
-        threshold = 40.0
+        threshold = 2.5
     else:
-        threshold = 50.0
+        threshold = 3.0 # Any probability over 3% will now correctly flag modern synthetic images
+
+    is_fake = bool(raw.get("is_fake", fake_score >= threshold))
 
     is_fake = bool(raw.get("is_fake", fake_score >= threshold))
     verdict = "fake" if is_fake else "real"
