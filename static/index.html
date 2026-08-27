@@ -801,6 +801,23 @@
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
+            // --- NEW: EXPLICIT ERROR INTERCEPTOR ---
+            if (data.status === "SYSTEM MESSAGE" || data.error) {
+                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
+                box.innerHTML = closeBtn + `
+                    <div><strong>Result:</strong> ⚠️ API ERROR</div>
+                    <div class="break-all"><strong>File:</strong> ${file.name}</div>
+                    <div class="mt-2 text-xs text-slate-300 border-t border-rose-500/30 pt-2">
+                        <span class="font-bold text-rose-400">Analysis:</span> ${data.reason || "Cloud AI failed to respond."}
+                        <ul class="mt-2 text-slate-400">
+                            ${(data.signs || []).map(sign => `<li class="ml-4 list-disc text-[11px] text-slate-400 mt-0.5">${sign}</li>`).join("")}
+                        </ul>
+                    </div>`;
+                setEngine("deepfake", "offline");
+                return; // Stop execution here so it doesn't draw the green box
+            }
+            // ----------------------------------------
+
             const fakePct = Number(data.fake_confidence ?? data.fake ?? data.deepfake_probability ?? 0);
             const realPct = Number(data.real_confidence ?? data.real ?? (100 - fakePct));
             const isDeepfake = Boolean(data.is_fake ?? data.is_deepfake ?? (fakePct >= 50));
@@ -812,7 +829,7 @@
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Result:</strong> 🚨 DEEPFAKE DETECTED</div>
-                    <div><strong>File:</strong> ${file.name}</div>
+                    <div class="break-all"><strong>File:</strong> ${file.name}</div>
                     <div><strong>Deepfake Probability:</strong> ${fakePct.toFixed(1)}%</div>
                     <div class="w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2">
                         <div class="h-full bg-rose-400" style="width:${Math.min(100, fakePct)}%"></div>
@@ -827,7 +844,7 @@
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Result:</strong> ✅ AUTHENTIC</div>
-                    <div><strong>File:</strong> ${file.name}</div>
+                    <div class="break-all"><strong>File:</strong> ${file.name}</div>
                     <div><strong>Deepfake Probability:</strong> ${fakePct.toFixed(1)}%</div>
                     <div><strong>Real Confidence:</strong> ${realPct.toFixed(1)}%</div>
                     <div class="w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2">
@@ -852,7 +869,6 @@
             setBackend("offline");
         }
     }
-
     // ============================================================
     // 3) checkPassword()
     // ============================================================
