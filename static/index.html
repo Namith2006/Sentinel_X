@@ -735,18 +735,18 @@
             const isThreat = Boolean(data.is_threat ?? data.is_phishing ?? ((data.risk_score ?? data.phishing_risk_percent ?? 0) >= 70));
             const risk = Number(data.risk_score ?? parseFloat(String(data.phishing_risk_percent ?? "0").replace("%","")) ?? 0);
 
-            if (isThreat) {
+           if (isThreat) {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Status:</strong> 🚨 THREAT DETECTED</div>
-                    <div><strong>URL:</strong> ${url}</div>
+                    <div class="break-all"><strong>URL:</strong> ${url}</div>
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
                     <div class="text-xs text-rose-300/80 mt-1">${data.reason || data.status || "Phishing signal confirmed."}</div>`;
             } else {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Status:</strong> ✅ SAFE</div>
-                    <div><strong>URL:</strong> ${url}</div>
+                    <div class="break-all"><strong>URL:</strong> ${url}</div>
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
                     <div class="text-xs text-emerald-300/80 mt-1">${data.reason || data.status || "No phishing indicators found."}</div>`;
             }
