@@ -356,7 +356,9 @@ def _looks_like_screenshot(filename: str) -> str | None:
             return kw
     return None
 
-
+@app.get("/api/health")
+async def health_check():
+    return {"status": "online"}
 # =========================================================================
 # ROUTES (mounted under /api)
 # =========================================================================
