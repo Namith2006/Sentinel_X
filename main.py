@@ -220,7 +220,7 @@ app = FastAPI(title="Sentinel X API", version="2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allows all domains (including your Vercel URL)
-    allow_credentials=True,
+    allow_credentials=False, # MUST BE FALSE WHEN ORIGINS IS ["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -356,9 +356,6 @@ def _looks_like_screenshot(filename: str) -> str | None:
             return kw
     return None
 
-@app.get("/api/health")
-async def health_check():
-    return {"status": "online"}
 # =========================================================================
 # ROUTES (mounted under /api)
 # =========================================================================
@@ -712,6 +709,7 @@ async def security_copilot_chat(request: Request):
         return {"reply": "⏳ Request timed out. Please check your network connection."}
     except Exception as e:
         return {"reply": f"⚠️ Internal Error: {str(e)}"}
+
 @app.get("/api/score")
 def api_score():
     score = compute_security_score()

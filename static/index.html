@@ -404,8 +404,8 @@
     <!-- =================== JAVASCRIPT =================== -->
     <script>
     // ---------- CONFIG ----------
-    // Change this to your exact Ngrok Forwarding URL
-    const API = "https://outwit-debunk-clergyman.ngrok-free.dev"; // ✨ Updated to Ngrok
+    // Ensure this matches your actual Render Web Service URL (without a trailing slash)
+    const API = "https://sentinel-x-vml9.onrender.com";
     const RP_NAME = "Sentinel X";
     const USER_ID = "sentinel-operator-001";
     const CRED_KEY = "sentinel_x_passkey_id";
@@ -651,17 +651,15 @@
     }
 
    async function refreshScore() {
-        // 1. Check if the backend is alive
+        // 1. Check if the backend is alive (Standard fetch without ngrok headers)
         try {
-            const r = await fetch(`${API}/api/health`, {
-                headers: { "ngrok-skip-browser-warning": "true" } // ✨ Added ngrok bypass
-            });
+            const r = await fetch(`${API}/api/health`);
             setBackend(r.ok ? "online" : "offline");
         } catch {
             setBackend("offline");
         }
 
-        // 2. Calculate actual score from the local ledger history!
+        // 2. Calculate actual score from the local ledger history
         const saved = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
         
         let currentScore = 100; // Baseline perfect score
@@ -688,11 +686,7 @@
 
     async function pollBackendHealth() {
         try {
-            const r = await fetch(`${API}/api/health`, { 
-                method: "GET", 
-                cache: "no-store",
-                headers: { "ngrok-skip-browser-warning": "true" } // ✨ Added ngrok bypass
-            }); 
+            const r = await fetch(`${API}/api/health`, { method: "GET", cache: "no-store" }); 
             if (r.ok) {
                 setBackend("online");
                 return true;
@@ -732,10 +726,7 @@
         try {
             const response = await fetch(`${API}/api/scan-url`, { 
                 method: "POST", 
-                headers: { 
-                    "Content-Type": "application/json",
-                    "ngrok-skip-browser-warning": "true" // ✨ Added ngrok bypass
-                }, 
+                headers: { "Content-Type": "application/json" }, 
                 body: JSON.stringify({ url: url })
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -801,11 +792,9 @@
             const formData = new FormData();
             formData.append("file", file);
 
+            // Removing headers completely allows the browser to properly set the multipart/form-data boundary
             const response = await fetch(`${API}/api/scan-image`, { 
                 method: "POST", 
-                headers: {
-                    "ngrok-skip-browser-warning": "true" // ✨ Added ngrok bypass
-                },
                 body: formData 
             });
             
@@ -883,10 +872,7 @@
         try {
             const response = await fetch(`${API}/api/check-password`, { 
                 method: "POST", 
-                headers: { 
-                    "Content-Type": "application/json",
-                    "ngrok-skip-browser-warning": "true" // ✨ Added ngrok bypass
-                }, 
+                headers: { "Content-Type": "application/json" }, 
                 body: JSON.stringify({ password: pw })
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1009,10 +995,7 @@
         try {
             const r = await fetch(`${API}/api/mitigate`, { 
                 method: "POST", 
-                headers: { 
-                    "Content-Type": "application/json",
-                    "ngrok-skip-browser-warning": "true" // ✨ Added ngrok bypass
-                }, 
+                headers: { "Content-Type": "application/json" }, 
                 body: JSON.stringify({ threat_type: threatType, risk_score: risk, details })
             });
             if (r.ok) {
@@ -1153,7 +1136,7 @@
 
         const chatMessages = $("chatMessages");
 
-        // ✨ NEW: Grab the actual dashboard logs from local storage!
+        // Grab the actual dashboard logs from local storage
         const savedLogs = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
 
         isChatProcessing = true;
@@ -1184,13 +1167,10 @@
         try {
             const r = await fetch(`${API}/api/chat`, { 
                 method: "POST",
-                headers: { 
-                    "Content-Type": "application/json",
-                    "ngrok-skip-browser-warning": "true" // ✨ Added ngrok bypass
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
                     message: msg,
-                    logs: savedLogs  // ✨ NEW: Sending the internal connection data
+                    logs: savedLogs
                 })
             });
             
