@@ -404,8 +404,8 @@
     <!-- =================== JAVASCRIPT =================== -->
     <script>
     // ---------- CONFIG ----------
-    // Change this to your exact Render web service URL
-const API = "https://sentinel-x-vml9.onrender.com";
+    // Change this to your exact Ngrok Forwarding URL
+    const API = "https://outwit-debunk-clergyman.ngrok-free.dev"; // ✨ Updated to Ngrok
     const RP_NAME = "Sentinel X";
     const USER_ID = "sentinel-operator-001";
     const CRED_KEY = "sentinel_x_passkey_id";
@@ -653,7 +653,9 @@ const API = "https://sentinel-x-vml9.onrender.com";
    async function refreshScore() {
         // 1. Check if the backend is alive
         try {
-            const r = await fetch(`${API}/api/health`); // ✨ Updated
+            const r = await fetch(`${API}/api/health`, {
+                headers: { "ngrok-skip-browser-warning": "true" } // ✨ Added ngrok bypass
+            });
             setBackend(r.ok ? "online" : "offline");
         } catch {
             setBackend("offline");
@@ -686,7 +688,11 @@ const API = "https://sentinel-x-vml9.onrender.com";
 
     async function pollBackendHealth() {
         try {
-            const r = await fetch(`${API}/api/health`, { method: "GET", cache: "no-store" }); // ✨ Updated
+            const r = await fetch(`${API}/api/health`, { 
+                method: "GET", 
+                cache: "no-store",
+                headers: { "ngrok-skip-browser-warning": "true" } // ✨ Added ngrok bypass
+            }); 
             if (r.ok) {
                 setBackend("online");
                 return true;
@@ -724,8 +730,13 @@ const API = "https://sentinel-x-vml9.onrender.com";
         box.innerHTML = closeBtn + "⏳ ANALYZING...";
 
         try {
-            const response = await fetch(`${API}/api/scan-url`, { // ✨ Updated
-                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: url })
+            const response = await fetch(`${API}/api/scan-url`, { 
+                method: "POST", 
+                headers: { 
+                    "Content-Type": "application/json",
+                    "ngrok-skip-browser-warning": "true" // ✨ Added ngrok bypass
+                }, 
+                body: JSON.stringify({ url: url })
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
@@ -790,7 +801,14 @@ const API = "https://sentinel-x-vml9.onrender.com";
             const formData = new FormData();
             formData.append("file", file);
 
-            const response = await fetch(`${API}/api/scan-image`, { method: "POST", body: formData }); // ✨ Updated
+            const response = await fetch(`${API}/api/scan-image`, { 
+                method: "POST", 
+                headers: {
+                    "ngrok-skip-browser-warning": "true" // ✨ Added ngrok bypass
+                },
+                body: formData 
+            });
+            
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
@@ -863,8 +881,13 @@ const API = "https://sentinel-x-vml9.onrender.com";
         box.innerHTML = closeBtn + "⏳ ANALYZING PASSWORD...";
 
         try {
-            const response = await fetch(`${API}/api/check-password`, { // ✨ Updated
-                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pw })
+            const response = await fetch(`${API}/api/check-password`, { 
+                method: "POST", 
+                headers: { 
+                    "Content-Type": "application/json",
+                    "ngrok-skip-browser-warning": "true" // ✨ Added ngrok bypass
+                }, 
+                body: JSON.stringify({ password: pw })
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
@@ -984,8 +1007,13 @@ const API = "https://sentinel-x-vml9.onrender.com";
 
         setEngine("llm", "busy");
         try {
-            const r = await fetch(`${API}/api/mitigate`, { // ✨ Updated
-                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ threat_type: threatType, risk_score: risk, details })
+            const r = await fetch(`${API}/api/mitigate`, { 
+                method: "POST", 
+                headers: { 
+                    "Content-Type": "application/json",
+                    "ngrok-skip-browser-warning": "true" // ✨ Added ngrok bypass
+                }, 
+                body: JSON.stringify({ threat_type: threatType, risk_score: risk, details })
             });
             if (r.ok) {
                 const d = await r.json();
@@ -1154,9 +1182,12 @@ const API = "https://sentinel-x-vml9.onrender.com";
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
         try {
-            const r = await fetch(`${API}/api/chat`, { // ✨ Updated
+            const r = await fetch(`${API}/api/chat`, { 
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    "ngrok-skip-browser-warning": "true" // ✨ Added ngrok bypass
+                },
                 body: JSON.stringify({ 
                     message: msg,
                     logs: savedLogs  // ✨ NEW: Sending the internal connection data
