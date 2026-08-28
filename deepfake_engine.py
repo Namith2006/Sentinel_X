@@ -79,7 +79,6 @@ You MUST return ONLY a strict JSON object with no markdown fences, backticks, or
                 "real_confidence": 8.0 if is_fake else 96.0,
                 "reason": "Generative artifacts detected." if is_fake else "Authentic visual structure verified.",
                 "signs": ["Synthetic anomalies detected"] if is_fake else ["Consistent linework and structural integrity verified"]
-            }
-        
+            }     
     except Exception as e:
         return {"error": True, "reason": f"Vision Analysis Error: {str(e)}"}
