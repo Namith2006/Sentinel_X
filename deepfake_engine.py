@@ -5,8 +5,8 @@ import requests
 # Grab the secure key from Render
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 
-# Switched to a model specifically trained on modern Diffusion/AI-generated images
-API_URL = "https://router.huggingface.co/hf-inference/models/umm-maybe/AI-image-detector"
+# Connecting to a highly aggressive ViT trained on modern generative AI
+API_URL = "https://router.huggingface.co/hf-inference/models/prithivMLmods/Deep-Fake-Detector-v2-Model"
 
 def analyze_image(image_path: str) -> dict:
     if not HF_API_TOKEN:
@@ -43,13 +43,11 @@ def analyze_image(image_path: str) -> dict:
             label = str(item.get("label", "")).lower()
             score = float(item.get("score", 0.0)) * 100
             
-            # This specific model uses "artificial" and "human" as classifications
-            if "artificial" in label or "fake" in label or "generated" in label:
+            if "fake" in label or "artificial" in label:
                 fake_score = score
-            elif "human" in label or "real" in label or "authentic" in label:
+            elif "real" in label or "human" in label:
                 real_score = score
                 
-        # Ensure scores balance out to 100%
         if fake_score == 0.0 and real_score > 0.0:
             fake_score = 100.0 - real_score
         elif real_score == 0.0 and fake_score > 0.0:
