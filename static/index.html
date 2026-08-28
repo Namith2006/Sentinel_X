@@ -723,7 +723,7 @@
         box.className = "mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono text-cyan-200 relative pr-8";
         box.innerHTML = closeBtn + "⏳ ANALYZING...";
 
-        try {
+      try {
             const response = await fetch(`${API}/api/scan-url`, { 
                 method: "POST", 
                 headers: { "Content-Type": "application/json" }, 
@@ -732,27 +732,36 @@
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
-            const isThreat = Boolean(data.is_threat ?? data.is_phishing ?? ((data.risk_score ?? data.phishing_risk_percent ?? 0) >= 70));
             const risk = Number(data.risk_score ?? parseFloat(String(data.phishing_risk_percent ?? "0").replace("%","")) ?? 0);
+            const isThreat = risk >= 70.0 || data.is_phishing;
+            const isSuspicious = risk >= 35.0 && risk < 70.0;
 
-           if (isThreat) {
+            if (isThreat) {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Status:</strong> 🚨 THREAT DETECTED</div>
                     <div class="break-all"><strong>URL:</strong> ${url}</div>
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
-                    <div class="text-xs text-rose-300/80 mt-1">${data.reason || data.status || "Phishing signal confirmed."}</div>`;
+                    <div class="text-xs text-rose-300/80 mt-1">${data.reason || "Phishing signal confirmed."}</div>`;
+            } else if (isSuspicious) {
+                // NEW: Amber warning box for mid-tier risks
+                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-amber-500/10 border border-amber-500/40 text-amber-200 relative pr-8";
+                box.innerHTML = closeBtn + `
+                    <div><strong>Status:</strong> ⚠️ SUSPICIOUS</div>
+                    <div class="break-all"><strong>URL:</strong> ${url}</div>
+                    <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
+                    <div class="text-xs text-amber-300/80 mt-1">${data.reason || "Unverified or risky domain."}</div>`;
             } else {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Status:</strong> ✅ SAFE</div>
                     <div class="break-all"><strong>URL:</strong> ${url}</div>
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
-                    <div class="text-xs text-emerald-300/80 mt-1">${data.reason || data.status || "No phishing indicators found."}</div>`;
+                    <div class="text-xs text-emerald-300/80 mt-1">${data.reason || "No phishing indicators found."}</div>`;
             }
 
-            if (isThreat) triggerMitigation("phishing", { url, risk, ...data });
-            logLedger("phishing", isThreat ? "THREAT" : "SAFE");
+            if (isThreat || isSuspicious) triggerMitigation("phishing", { url, risk, ...data });
+            logLedger("phishing", isThreat ? "THREAT" : (isSuspicious ? "SUSPICIOUS" : "SAFE"));
             setEngine("phishing", "online");
             setBackend("online");
         } catch (err) {

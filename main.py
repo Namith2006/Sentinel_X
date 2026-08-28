@@ -219,6 +219,7 @@ def _coerce_url_payload(payload: dict | None, form_url: str | None) -> str:
 
 
 def _normalize_phishing(raw: dict, url: str) -> dict:
+    """Map the engine output to the field names the dashboard expects."""
     is_phishing = bool(raw.get("is_phishing"))
     risk_text = str(raw.get("phishing_risk_percent", "0%")).rstrip("%")
     try:
@@ -227,24 +228,33 @@ def _normalize_phishing(raw: dict, url: str) -> dict:
         risk_score = 0.0
     risk_score = max(0.0, min(100.0, risk_score))
 
-    status_text = str(raw.get("status", ""))
-    if "safe" in status_text.lower():
-        verdict = "safe"
-    elif is_phishing or risk_score >= 70:
+    # 1. Prioritize mathematical risk score over raw text output
+    if is_phishing or risk_score >= 70.0:
         verdict = "phishing"
-    else:
+    elif risk_score >= 35.0:
         verdict = "suspicious"
+    else:
+        verdict = "safe"
+
+    # 2. Prevent the backend from displaying "SAFE" text on risky domains
+    reason_text = str(raw.get("status", "")).strip()
+    if not reason_text or ("safe" in reason_text.lower() and verdict != "safe"):
+        if verdict == "suspicious":
+            reason_text = "Unverified third-party app distributor or adware risk detected."
+        elif verdict == "phishing":
+            reason_text = "Critical threat: Phishing or severe malware signatures detected."
+        else:
+            reason_text = "Domain verified as safe."
 
     return {
         "url": url,
-        "is_phishing": is_phishing,
+        "is_phishing": verdict == "phishing",
         "phishing_risk_percent": f"{risk_score:.2f}%",
         "risk_score": risk_score,
-        "status": verdict.upper() if verdict != "safe" else "SAFE",
-        "reason": status_text or "",
+        "status": verdict.upper(),
+        "reason": reason_text,
         "details": raw,
     }
-
 
 def _normalize_image(raw: dict, filename: str) -> dict:
     """Map the deepfake engine output to the field names the dashboard expects."""
