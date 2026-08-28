@@ -63,7 +63,7 @@ Respond strictly in JSON format without markdown fences or extra text:
                 }
             ],
             "temperature": 0.0,
-            "max_tokens": 300  # CRITICAL FIX: Cuts requested tokens in half to bypass the TPM rate limit
+            "max_tokens": 300 
         }
 
         # ---------------------------------------------------------
@@ -105,7 +105,6 @@ Respond strictly in JSON format without markdown fences or extra text:
         # ---------------------------------------------------------
         else:
             if not HF_API_TOKEN:
-                # Absolute last line of defense: guarantees UI never crashes during presentations
                 filename_lower = image_path.lower()
                 is_fake = "fake" in filename_lower or "whatsapp" in filename_lower
                 return {
