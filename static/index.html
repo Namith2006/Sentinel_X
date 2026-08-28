@@ -1218,19 +1218,44 @@
         }
     }
 
+    function formatCopilotMessage(rawText) {
+        if (!rawText) return "";
+
+        let formatted = rawText
+            .replace(/\*\*(Posture Summary|Critical Findings|Actionable Remediation[^:]*)\*\*/gi, "\n\n### $1\n")
+            .replace(/\s*-\s*\*\*/g, "\n- **")
+            .replace(/\s*(\d+\.)\s*\*\*/g, "\n$1 **");
+
+        formatted = formatted.replace(/^### (.*$)/gim, '<h4 class="text-cyan-400 font-bold tracking-wide text-xs uppercase mt-3 mb-1 border-b border-cyan-500/20 pb-1">$1</h4>');
+        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong class="text-slate-100 font-semibold">$1</strong>');
+        formatted = formatted.replace(/^- (.*$)/gim, '<div class="flex items-start gap-1.5 ml-1 my-0.5 text-slate-300"><span class="text-cyan-400 leading-tight">•</span><span>$1</span></div>');
+        formatted = formatted.replace(/^(\d+)\. (.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1 text-slate-300"><span class="bg-cyan-500/20 text-cyan-300 text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30">$1</span><span>$2</span></div>');
+
+        formatted = formatted
+            .split("\n\n")
+            .map(paragraph => {
+                const trimmed = paragraph.trim();
+                if (!trimmed) return "";
+                if (trimmed.startsWith("<h4") || trimmed.startsWith("<div")) return trimmed;
+                return `<p class="my-1 text-slate-300 leading-relaxed">${trimmed}</p>`;
+            })
+            .join("");
+
+        return formatted;
+    }
+
     function appendAiResponse(text) {
         const chatMessages = $("chatMessages");
         const aiHtml = `
             <div class="flex gap-3">
                 <div class="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center shrink-0">🤖</div>
-                <div class="bg-cyber-800 border border-slate-700 p-3 rounded-lg rounded-tl-none text-xs text-slate-300 leading-relaxed shadow-sm">
-                    ${text}
+                <div class="bg-cyber-800 border border-slate-700 p-3 rounded-lg rounded-tl-none text-xs text-slate-300 leading-relaxed shadow-sm flex-1 overflow-hidden">
+                    ${formatCopilotMessage(text)}
                 </div>
             </div>`;
         chatMessages.insertAdjacentHTML("beforeend", aiHtml);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-
     // ---------- INIT ----------
     $("registerBtn").addEventListener("click", registerPasskey);
     $("unlockBtn").addEventListener("click", authenticatePasskey);
