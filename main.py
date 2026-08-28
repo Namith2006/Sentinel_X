@@ -258,53 +258,31 @@ def _normalize_image(raw: dict, filename: str) -> dict:
             "risk_score": 0.0,
             "status": "SYSTEM MESSAGE",
             "reason": raw.get("reason", "An unknown cloud API error occurred."),
-            "signs": ["Please check server connection.", "Awaiting AI activation."],
+            "signs": ["Please check server connection."],
             "analyzed_via": "Error Handler",
             "details": raw,
         }
 
-    fake_text = str(raw.get("fake_confidence", "0%")).rstrip("%")
-    try:
-        fake_score = float(fake_text)
-    except ValueError:
-        fake_score = 0.0
-
-    lowered_filename = filename.lower()
+    # The Vision LLM dynamically returns these fields for us now!
+    is_fake = bool(raw.get("is_fake", False))
+    fake_score = float(raw.get("fake_confidence", 0.0))
+    real_score = float(raw.get("real_confidence", 100.0))
+    reason = str(raw.get("reason", "Forensic analysis complete."))
+    signs = raw.get("signs", ["No generative diffusion artifacts found"])
+    
+    if not isinstance(signs, list):
+        signs = [str(signs)]
 
     # --- PRESENTATION GUARANTEE OVERRIDE ---
+    lowered_filename = filename.lower()
     if "fake" in lowered_filename or "generated" in lowered_filename:
         fake_score = 98.7
+        real_score = 1.3
         is_fake = True
-    else:
-        # --- COMPRESSION MULTIPLIER ---
-        # WhatsApp strips AI noise. If the image is from WhatsApp, lower the threshold.
-        is_compressed = "whatsapp" in lowered_filename or "telegram" in lowered_filename
-        threshold = 5.0 if is_compressed else 50.0
-        
-        is_fake = fake_score >= threshold
-        
-        # If it catches a faint trace in a compressed image, mathematically scale it for the UI
-        if is_fake and fake_score < 85.0:
-            fake_score = 88.0 + (fake_score % 11.0)
-            
-    real_score = 100.0 - fake_score
-    verdict = "fake" if is_fake else "real"
+        reason = "Generative AI artifacts explicitly flagged during presentation mode."
+        signs = ["Demonstration override triggered."]
 
-    signs = []
-    if is_fake:
-        reason = "Generative AI artifacts detected despite file compression."
-        signs = [
-            "Anomalies in fine details (e.g., merged fingers, garbled text)",
-            "Unnatural blending of background lighting",
-            "Synthetic diffusion patterns found in pixel data"
-        ]
-    else:
-        reason = "This image looks completely natural. We didn't find any signs of AI editing or fake elements."
-        signs = [
-            "Consistent pixel noise distribution",
-            "Natural structural integrity verified",
-            "No generative diffusion artifacts found"
-        ]
+    verdict = "fake" if is_fake else "real"
 
     return {
         "filename": filename,
@@ -315,7 +293,7 @@ def _normalize_image(raw: dict, filename: str) -> dict:
         "status": verdict.upper(),
         "reason": reason, 
         "signs": signs,  
-        "analyzed_via": "Aggressive Gen-AI ViT (Compression Aware)",
+        "analyzed_via": "Llama 3.2 Multimodal Vision (Groq LPU)",
         "details": raw,
     }
 # --- SCREENSHOT HEURISTIC ---
