@@ -18,26 +18,25 @@ def analyze_image(image_path: str) -> dict:
         ext = image_path.split('.')[-1].lower()
         mime_type = f"image/{ext}" if ext in ['jpg', 'jpeg', 'png', 'webp'] else "image/jpeg"
 
-        system_prompt = """You are a senior digital forensics specialist inspecting images for Generative AI (Midjourney v6, Flux, Stable Diffusion XL, DALL-E 3) and synthetic manipulation.
+        system_prompt = """You are a digital forensics AI specialized in detecting Generative AI (Midjourney v6, Flux.1, SDXL, DALL-E 3) and photorealistic synthetic images.
 
-Modern AI generators render hands and legible text correctly, so you must evaluate high-level diffusion hallmarks:
-1. Diffusion Lighting & Contrast: Look for artificial global illumination, cinematic soft-box fill light in outdoor/candid scenes, and painterly specular highlights on hair and skin.
-2. Synthetic Surface Details: Examine skin pores, wrinkles, dirt, and fabric wear. Diffusion models generate uniform, "painted-on" grime and overly stylized tears without realistic frayed micro-fibers.
-3. Optical & Bokeh Coherence: Check background depth of field. AI diffusion engines often blur backgrounds with synthetic gradient falloff rather than genuine camera lens focal physics.
-4. Stylistic AI Tropes: Highly dramatic, hyper-curated cinematic compositions designed to evoke emotional realism.
+Evaluate the image across these forensic markers:
+1. Aesthetic & Staging: Does the scene feature the hyper-curated, cinematic 'grungy' realism or dramatic lighting characteristic of diffusion prompts?
+2. Surface Textures: Are dirt patterns, skin pores, and clothing tears applied with procedural uniformity rather than natural physical wear?
+3. Lighting Physics: Are specular highlights on glasses, skin, and eyes logically aligned with the ambient environment, or do they exhibit synthetic studio fill light?
+4. Background Optics: Is the background depth-of-field rendered using algorithmic diffusion blur rather than natural optical lens physics?
 
-Strict Guidelines:
-- If the image exhibits synthetic diffusion textures, hyper-curated lighting, or AI-rendered skin/fabric, mark is_fake: true with high fake_confidence (> 85.0).
-- Standard digital 2D art / anime / wallpapers without diffusion artifacts are AUTHENTIC (is_fake: false).
-- Genuine, unmanipulated camera photos with natural optical noise and realistic lens dynamics are AUTHENTIC (is_fake: false).
+Classification Rules:
+- If the image shows generative AI / diffusion hallmarks (even if photorealistic), set "is_fake": true, with "fake_confidence" between 88.0 and 99.0.
+- If the image is a genuine camera capture or standard hand-drawn illustration without generative artifacts, set "is_fake": false, with "fake_confidence" below 10.0.
 
-Output strictly in JSON format matching this schema:
+You must respond strictly with valid JSON without markdown fences, code blocks, or extra text:
 {
     "is_fake": boolean,
-    "fake_confidence": float (0-100),
-    "real_confidence": float (0-100),
-    "reason": "Clear forensic explanation of identified diffusion artifacts or verified camera optics.",
-    "signs": ["Specific visual observation 1", "Specific visual observation 2"]
+    "fake_confidence": float,
+    "real_confidence": float,
+    "reason": "Forensic explanation of detected diffusion artifacts or authentic camera characteristics.",
+    "signs": ["Evidence item 1", "Evidence item 2", "Evidence item 3"]
 }"""
 
         headers = {
@@ -55,12 +54,12 @@ Output strictly in JSON format matching this schema:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Perform a detailed forensic analysis of this image for synthetic diffusion artifacts. Return only the JSON object."},
+                        {"type": "text", "text": "Perform a digital forensic evaluation. Is this an AI-generated image or an authentic camera photo? Respond only in JSON."},
                         {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded_string}"}}
                     ]
                 }
             ],
-            "temperature": 0.1,
+            "temperature": 0.0,
             "response_format": {"type": "json_object"}
         }
 
@@ -78,6 +77,9 @@ Output strictly in JSON format matching this schema:
             try:
                 data = json.loads(clean_json)
                 data["error"] = False
+                # Ensure real + fake sum to 100
+                if "fake_confidence" in data and "real_confidence" not in data:
+                    data["real_confidence"] = round(100.0 - float(data["fake_confidence"]), 2)
                 return data
             except json.JSONDecodeError:
                 pass
