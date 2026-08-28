@@ -219,7 +219,27 @@ def _coerce_url_payload(payload: dict | None, form_url: str | None) -> str:
 
 
 def _normalize_phishing(raw: dict, url: str) -> dict:
-    """Map the engine output to the field names the dashboard expects."""
+    """Map the engine output to the field names the dashboard expects, with a trusted whitelist."""
+    
+    # 1. GLOBAL TRUSTED WHITELIST (Bypasses false positives for major corporate sites)
+    url_lower = url.lower().strip()
+    trusted_domains = [
+        "microsoft.com", "google.com", "github.com", "apple.com", 
+        "openai.com", "amazon.com", "cloudflare.com", "vercel.com", 
+        "render.com", "huggingface.co", "python.org"
+    ]
+    
+    if any(domain in url_lower for domain in trusted_domains):
+        return {
+            "url": url,
+            "is_phishing": False,
+            "phishing_risk_percent": "0.00%",
+            "risk_score": 0.0,
+            "status": "SAFE",
+            "reason": "Verified trusted global enterprise domain.",
+            "details": raw,
+        }
+
     is_phishing = bool(raw.get("is_phishing"))
     risk_text = str(raw.get("phishing_risk_percent", "0%")).rstrip("%")
     try:
@@ -228,7 +248,6 @@ def _normalize_phishing(raw: dict, url: str) -> dict:
         risk_score = 0.0
     risk_score = max(0.0, min(100.0, risk_score))
 
-    # 1. Prioritize mathematical risk score over raw text output
     if is_phishing or risk_score >= 70.0:
         verdict = "phishing"
     elif risk_score >= 35.0:
@@ -236,7 +255,6 @@ def _normalize_phishing(raw: dict, url: str) -> dict:
     else:
         verdict = "safe"
 
-    # 2. Prevent the backend from displaying "SAFE" text on risky domains
     reason_text = str(raw.get("status", "")).strip()
     if not reason_text or ("safe" in reason_text.lower() and verdict != "safe"):
         if verdict == "suspicious":
@@ -255,7 +273,6 @@ def _normalize_phishing(raw: dict, url: str) -> dict:
         "reason": reason_text,
         "details": raw,
     }
-
 def _normalize_image(raw: dict, filename: str) -> dict:
     """Map the deepfake engine output to the field names the dashboard expects."""
     
