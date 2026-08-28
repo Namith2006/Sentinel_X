@@ -40,7 +40,7 @@ You MUST return ONLY a strict JSON object with no markdown fences, backticks, or
         }
         
         payload = {
-            "model": "llama-3.2-11b-vision-preview",
+            "model": "qwen/qwen3.6-27b",  # UPDATED TO CURRENTLY SUPPORTED GROQ VISION MODEL
             "messages": [
                 {
                     "role": "system",
