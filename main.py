@@ -19,7 +19,7 @@ ledger table reflect real activity in real time.
 """
 
 from __future__ import annotations
-
+from trusted_domains import is_trusted_domain
 import hashlib
 import json
 import math
@@ -219,27 +219,21 @@ def _coerce_url_payload(payload: dict | None, form_url: str | None) -> str:
 
 
 def _normalize_phishing(raw: dict, url: str) -> dict:
-    """Map the engine output to the field names the dashboard expects, with a trusted whitelist."""
+    """Map the engine output to the field names the dashboard expects, with trusted domain verification."""
     
-    # 1. GLOBAL TRUSTED WHITELIST (Bypasses false positives for major corporate sites)
-    url_lower = url.lower().strip()
-    trusted_domains = [
-        "microsoft.com", "google.com", "github.com", "apple.com", 
-        "openai.com", "amazon.com", "cloudflare.com", "vercel.com", 
-        "render.com", "huggingface.co", "python.org"
-    ]
-    
-    if any(domain in url_lower for domain in trusted_domains):
+    # 1. Check against the comprehensive trusted domain registry
+    if is_trusted_domain(url):
         return {
             "url": url,
             "is_phishing": False,
             "phishing_risk_percent": "0.00%",
             "risk_score": 0.0,
             "status": "SAFE",
-            "reason": "Verified trusted global enterprise domain.",
+            "reason": "Verified legitimate enterprise domain / trusted infrastructure.",
             "details": raw,
         }
 
+    # 2. Standard risk evaluation for all unverified / third-party URLs
     is_phishing = bool(raw.get("is_phishing"))
     risk_text = str(raw.get("phishing_risk_percent", "0%")).rstrip("%")
     try:
@@ -258,9 +252,9 @@ def _normalize_phishing(raw: dict, url: str) -> dict:
     reason_text = str(raw.get("status", "")).strip()
     if not reason_text or ("safe" in reason_text.lower() and verdict != "safe"):
         if verdict == "suspicious":
-            reason_text = "Unverified third-party app distributor or adware risk detected."
+            reason_text = "Unverified third-party domain or APK distributor detected."
         elif verdict == "phishing":
-            reason_text = "Critical threat: Phishing or severe malware signatures detected."
+            reason_text = "Critical threat: Phishing or malicious heuristic patterns detected."
         else:
             reason_text = "Domain verified as safe."
 
