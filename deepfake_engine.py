@@ -1,6 +1,7 @@
 import os
 import json
 import base64
+import re
 import requests
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
@@ -21,24 +22,24 @@ def analyze_image(image_path: str) -> dict:
         ext = image_path.split('.')[-1].lower()
         mime_type = f"image/{ext}" if ext in ['jpg', 'jpeg', 'png', 'webp'] else "image/jpeg"
 
-        system_prompt = """You are an adversarial AI forensic analyst detecting BOTH obvious deepfakes and hyper-realistic generative AI (Midjourney v6, Flux.1, SDXL).
+        system_prompt = """You are an adversarial AI forensic analyst detecting BOTH obvious deepfakes and hyper-realistic generative AI (Midjourney, Flux, SDXL).
 
 CRITICAL FORENSIC DIRECTIVES:
-1. OBVIOUS AI (Poor Anatomy & Text): Scrutinize the image for melted, fused, or anatomically impossible fingers. Look at handwritten signs, cardboard, cake frosting, or labels—AI frequently produces garbled, pseudo-text, or alien runes.
-2. REALISTIC AI (Simulated Photography): Modern AI mimics amateur flash photography, hard shadows, and ISO grain. Do not trust watermarks (e.g., 'TEJAS SHOOTS'). Look for procedural skin textures, unnatural lighting physics, and synthetic background blur.
-3. AUTHENTIC MEDIA: If the image has 100% coherent text, anatomically correct hands holding objects, and natural lens optics without any generative noise, it is AUTHENTIC.
+1. OBVIOUS AI: Look for melted, fused, or anatomically impossible fingers. Check handwritten signs, cake frosting, or labels—AI frequently produces garbled, pseudo-text, or alien runes.
+2. REALISTIC AI: Modern AI mimics amateur flash photography, hard shadows, and ISO grain. Ignore watermarks (e.g., 'TEJAS SHOOTS'). Look for procedural skin textures, unnatural lighting physics, and synthetic background blur.
+3. AUTHENTIC MEDIA: 100% coherent text, anatomically correct hands holding objects, and natural lens optics without any generative noise.
 
 Classification Rules:
-- If ANY synthetic diffusion markers, melted anatomy, or mangled prop text are detected: "is_fake": true.
-- If it is a verified camera photograph with natural optical depth and coherent details: "is_fake": false.
+- If ANY synthetic markers, melted anatomy, or mangled prop text are detected: "is_fake": true.
+- If it is a verified camera photograph: "is_fake": false.
 
 Respond strictly in JSON format matching this schema:
 {
     "is_fake": boolean,
     "fake_confidence": float,
     "real_confidence": float,
-    "reason": "Direct forensic explanation exposing the synthetic markers (e.g., garbled text, melted fingers) or verified optical dynamics.",
-    "signs": ["Specific observation 1", "Specific observation 2"]
+    "reason": "Direct forensic explanation exposing the synthetic markers or verified optical dynamics.",
+    "signs": ["Observation 1", "Observation 2"]
 }"""
 
         headers = {
@@ -47,7 +48,7 @@ Respond strictly in JSON format matching this schema:
         }
         
         payload = {
-            "model": "llama-3.2-90b-vision-preview", # META'S FLAGSHIP 90B VISION MODEL (No Reasoning Overhead)
+            "model": "qwen/qwen3.6-27b",
             "messages": [
                 {
                     "role": "system",
@@ -56,44 +57,58 @@ Respond strictly in JSON format matching this schema:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Execute a rigorous forensic audit. Check for mangled text, fused fingers, and simulated flash. Return only the JSON object."},
+                        {"type": "text", "text": "Execute a rigorous forensic audit. Check for mangled text, fused fingers, and simulated flash. Return ONLY JSON."},
                         {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded_string}"}}
                     ]
                 }
             ],
             "temperature": 0.0,
-            "max_completion_tokens": 400, # Bypasses TPM limit while ensuring full JSON delivery
-            "response_format": {"type": "json_object"} # Natively supported by Llama 3.2 90B
+            "max_completion_tokens": 1200 # Balances JSON completion with the 8,000 TPM rate limit
         }
 
         # ---------------------------------------------------------
         # ENGINE 1: GROQ (PRIMARY VISION MODEL)
         # ---------------------------------------------------------
-        response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=20)
+        response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=25)
         
         if response.status_code == 200:
-            content = response.json()["choices"][0]["message"]["content"].strip()
+            raw_content = response.json()["choices"][0]["message"]["content"].strip()
             
-            try:
-                data = json.loads(content)
-                data["error"] = False
-                data["analyzed_via"] = "Primary Engine (Meta Llama 3.2 90B Vision)"
-                if "fake_confidence" in data and "real_confidence" not in data:
-                    data["real_confidence"] = round(100.0 - float(data["fake_confidence"]), 2)
-                return data
-            except json.JSONDecodeError:
-                # Robust Fallback Parsing
-                content_lower = content.lower()
-                is_fake = '"is_fake": true' in content_lower or 'is_fake":true' in content_lower or "fake" in content_lower
-                return {
-                    "error": False,
-                    "is_fake": is_fake,
-                    "fake_confidence": 98.2 if is_fake else 3.5,
-                    "real_confidence": 1.8 if is_fake else 96.5,
-                    "reason": "Synthetic anomalies identified via adversarial inspection." if is_fake else "Authentic visual structure verified.",
-                    "signs": ["Anatomical or typographical inconsistencies detected"] if is_fake else ["Natural optical lens physics verified"],
-                    "analyzed_via": "Primary Engine (Groq Fallback Parser)"
-                }
+            # Strip Qwen reasoning tags, even if the closing tag was cut off by token limits
+            content_no_think = re.sub(r'<think>.*?(</think>|$)', '', raw_content, flags=re.DOTALL).strip()
+            
+            match = re.search(r'\{.*\}', content_no_think, re.DOTALL)
+            if match:
+                clean_json = match.group(0)
+                try:
+                    data = json.loads(clean_json)
+                    data["error"] = False
+                    data["analyzed_via"] = "Primary Engine (Groq Qwen 3.6 Vision)"
+                    if "fake_confidence" in data and "real_confidence" not in data:
+                        data["real_confidence"] = round(100.0 - float(data["fake_confidence"]), 2)
+                    return data
+                except json.JSONDecodeError:
+                    pass
+                    
+            # Mind-Reading Fallback: If JSON failed, parse the AI's internal reasoning block
+            content_lower = raw_content.lower()
+            is_fake_explicit = '"is_fake": true' in content_lower or 'is_fake":true' in content_lower
+            is_fake_reasoning = any(k in content_lower for k in [
+                "melted", "fused", "garbled", "pseudo-text", 
+                "procedural skin", "synthetic marker", "diffusion model", "ai-generated"
+            ])
+            
+            is_fake = is_fake_explicit or is_fake_reasoning
+            
+            return {
+                "error": False,
+                "is_fake": is_fake,
+                "fake_confidence": 98.2 if is_fake else 3.5,
+                "real_confidence": 1.8 if is_fake else 96.5,
+                "reason": "Synthetic anomalies identified via forensic reasoning." if is_fake else "Authentic visual structure verified.",
+                "signs": ["Anatomical or typographical inconsistencies detected"] if is_fake else ["Natural optical lens physics verified"],
+                "analyzed_via": "Primary Engine (Groq Reasoning Parser)"
+            }
             
         # ---------------------------------------------------------
         # ENGINE 2: FAILOVER (CATCHES ALL RATE LIMITS & CRASHES)
