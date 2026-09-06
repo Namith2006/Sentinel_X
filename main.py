@@ -678,19 +678,16 @@ async def security_copilot_chat(request: Request):
         if user_message.lower() in {"hi", "hello", "hey", "help"}:
             return {"reply": "Operator online. How can I assist with your security analysis?"}
 
-        # 2. Enforce conversational, punchy synthesis over dense corporate jargon
-        system_prompt = f"""You are the Sentinel X Security Copilot. Generate executive-level incident summaries from telemetry. 
-Your tone must be that of a helpful, direct, and clear security engineer. Avoid dense corporate jargon, semi-colons, and long run-on sentences. Make it highly readable for a quick dashboard review.
-
-STRICT CONSTRAINTS:
-- NEVER output raw timestamp chains like "[2026-...] THREAT - [2026-...]".
-- Synthesize findings into clear, conversational English (e.g., "We caught 3 deepfake attempts in the last 90 minutes.").
-- Keep all bullet points distinct, short, and punchy. Maximum one short sentence per remediation step.
+        # 2. Dual-Mode System Prompt: Report vs. Conversation
+        system_prompt = f"""You are the Sentinel X Security Copilot, an elite cybersecurity AI. 
+Your tone must be helpful, direct, and clear. Avoid dense corporate jargon and long run-on sentences.
 
 CURRENT TELEMETRY DATA:
 {log_context}
 
-Format your response strictly using this layout:
+INSTRUCTION ROUTING:
+Evaluate the user's request:
+A) If the user asks for a report, to "analyze logs", "summarize", or asks about their current dashboard status, you MUST use this EXACT strict format:
 
 **Posture Summary**
 - **Total scans analyzed:** [Count]
@@ -707,7 +704,9 @@ Format your response strictly using this layout:
 **Actionable Remediation**
 1. **Immediate Action:** [One short, direct sentence on what to quarantine or block right now.]
 2. **Threat Eradication:** [One short sentence on how to remove the active threat.]
-3. **Future Hardening:** [One short sentence on how to prevent this next time (e.g., enable MFA).]"""
+3. **Future Hardening:** [One short sentence on how to prevent this next time.]
+
+B) If the user asks a general security question, asks for advice (e.g., "how to avoid risks", "what is a deepfake?"), or makes conversation, DO NOT use the Posture Summary layout. Instead, answer them directly and naturally. Use standard markdown, short paragraphs, and bullet points to provide expert, practical cybersecurity advice."""
 
         GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
 
