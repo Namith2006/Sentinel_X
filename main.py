@@ -705,7 +705,7 @@ Ensure each bullet and numbered item is on its own separate line."""
 
        # CHANGE THIS BLOCK in main.py
         payload = {
-            "model": "llama3-70b-8192", # <-- Updated to the universally stable model string
+            "model": "llama-3.1-8b-instant", # <-- The most stable, universally available model
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"User Request: {user_message}\n\nSystem Logs:\n{log_context}"}
@@ -713,7 +713,6 @@ Ensure each bullet and numbered item is on its own separate line."""
             "temperature": 0.2,
             "max_tokens": 800
         }
-
         response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=15)
         
         if response.status_code == 200:
