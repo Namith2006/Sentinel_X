@@ -3,6 +3,7 @@ import ssl
 import socket
 import warnings
 import joblib
+import requests
 from urllib.parse import urlparse
 
 try:
@@ -37,6 +38,27 @@ def extract_features(url: str):
         1 if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", domain) else 0
     ]]
 
+def check_urlhaus(url: str) -> dict | None:
+    """Query the URLhaus OSINT database for known malware distribution."""
+    try:
+        data = {'url': url}
+        # 2.0 second timeout ensures the UI doesn't hang during a live presentation
+        response = requests.post('https://urlhaus-api.abuse.ch/v1/url/', data=data, timeout=2.0)
+        if response.status_code == 200:
+            json_resp = response.json()
+            if json_resp.get('query_status') == 'ok' and json_resp.get('url_status') == 'online':
+                tags = json_resp.get('tags', [])
+                tag_str = f" (Tags: {', '.join(tags)})" if tags else ""
+                return {
+                    "is_phishing": True,
+                    "phishing_risk_percent": 99.0,
+                    "status": "CRITICAL THREAT",
+                    "reason": f"OSINT Alert: URL flagged as active malware by URLhaus database{tag_str}."
+                }
+    except Exception:
+        pass  # Fail silently and let the local ML/SSL pipeline take over
+    return None
+
 def analyze_url(url: str) -> dict:
     url = url.strip()
     if not url.startswith(("http://", "https://")):
@@ -50,8 +72,13 @@ def analyze_url(url: str) -> dict:
             "status": "SAFE",
             "reason": "Verified legitimate enterprise domain."
         }
+        
+    # 2. OSINT THREAT INTELLIGENCE (Crowdsourced Datasets)
+    osint_override = check_urlhaus(url)
+    if osint_override:
+        return osint_override
 
-    # 2. KEYWORD OVERRIDES
+    # 3. KEYWORD OVERRIDES
     lowered = url.lower()
     for kw in SUSPICIOUS_KEYWORDS:
         if kw in lowered:
@@ -74,7 +101,7 @@ def analyze_url(url: str) -> dict:
     reasons = []
     ml_risk_score = 0.0
 
-    # 3. MACHINE LEARNING INFERENCE (GUARDED)
+    # 4. MACHINE LEARNING INFERENCE (GUARDED)
     if model:
         try:
             features = extract_features(url)
@@ -91,7 +118,7 @@ def analyze_url(url: str) -> dict:
     else:
         reasons.append("Rule-based heuristics active")
 
-    # 4. DYNAMIC SSL/TLS VALIDATION (GUARDED)
+    # 5. DYNAMIC SSL/TLS VALIDATION (GUARDED)
     ssl_risk_penalty = 0.0
     parsed = urlparse(url)
     hostname = (parsed.hostname or "").lower()
