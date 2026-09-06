@@ -639,95 +639,104 @@ async def security_copilot_chat(request: Request):
         data = await request.json()
         user_message = data.get("message", "").strip()
         user_logs = data.get("logs", [])
-        
-        # 1. API key is now automatically loaded via python-dotenv at the top of this file!
-        GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
-        
-        if not GROQ_API_KEY or GROQ_API_KEY == "your_api_key_here":
-            return {"reply": "Cloud AI Error: Invalid API Key. Please verify your .env configuration."}
 
-        # 2. Extract recent logs to give the AI context
-        log_summary_lines = []
+        # 1. Accurately categorize all three log states
         threat_count = 0
+        suspicious_count = 0
         safe_count = 0
+        recent_events = []
 
         if user_logs:
             for entry in user_logs[:25]:
                 status = str(entry.get("status", "")).upper()
-                vector = str(entry.get("vector", "")).upper()
-                ts = entry.get("ts", "N/A")
+                vector = str(entry.get("vector", entry.get("threat_type", "UNKNOWN"))).upper()
+                ts = str(entry.get("ts", entry.get("timestamp", "N/A")))[:19]
 
-                if "THREAT" in status or "COMPROMISED" in status or "FAKE" in status or "PHISHING" in status:
+                if any(k in status for k in ["THREAT", "COMPROMISED", "MALICIOUS", "PHISHING"]):
                     threat_count += 1
-                elif "SAFE" in status or "STRONG" in status or "AUTHENTIC" in status:
+                    status_label = "THREAT"
+                elif any(k in status for k in ["SUSPICIOUS", "MODERATE", "ADWARE"]):
+                    suspicious_count += 1
+                    status_label = "SUSPICIOUS"
+                else:
                     safe_count += 1
+                    status_label = "SAFE"
 
-                log_summary_lines.append(f"[{ts}] {vector}: {status}")
+                recent_events.append(f"- {vector} ({status_label}) at {ts}")
 
+            total_scans = len(recent_events)
             log_context = (
-                f"Total Logs Analyzed: {len(log_summary_lines)} "
-                f"(Threats/Compromised: {threat_count}, Safe/Verified: {safe_count})\n"
-                + "\n".join(log_summary_lines)
+                f"Total Scans: {total_scans}\n"
+                f"- High-Risk Threats: {threat_count}\n"
+                f"- Suspicious Items: {suspicious_count}\n"
+                f"- Safe/Verified: {safe_count}\n\n"
+                f"Chronological Event Summary:\n" + "\n".join(recent_events[:15])
             )
         else:
             log_context = "No system logs recorded yet."
 
-        # 3. Simple greeting check
         if user_message.lower() in {"hi", "hello", "hey", "help"}:
             return {"reply": "Operator online. How can I assist with your security analysis?"}
 
-        # 4. Strict Formatting System Prompt
-        system_prompt = """You are the SentinelAI Security Copilot. Deliver structured, executive-ready threat telemetry reports.
+        # 2. Enforce natural language synthesis over raw log dumping
+        system_prompt = f"""You are the Sentinel X Security Copilot. Generate executive-level incident summaries from telemetry.
 
-Always structure your responses using this EXACT layout with distinct double linebreaks:
+STRICT CONSTRAINTS:
+- NEVER output raw timestamp chains like "[2026-...] THREAT - [2026-...]".
+- Synthesize findings into clear, analytical English (e.g., "Observed 3 deepfake injections within a 90-minute period").
+- Keep bullet points distinct; do not combine separate events into a single line.
+
+CURRENT TELEMETRY DATA:
+{log_context}
+
+Format your response strictly using this layout:
 
 **Posture Summary**
 - **Total scans analyzed:** [Count]
 - **Threats/Compromised:** [Count] ([Percentage]%)
+- **Suspicious/Pending:** [Count] ([Percentage]%)
 - **Safe/Verified:** [Count] ([Percentage]%)
-- **Overall health:** [Score]% secure
+- **Overall health:** [Calculated Score]% secure
 
 **Critical Findings**
-1. **Deepfake Threats:** [Details with timestamps]
-2. **Phishing Activity:** [Details with timestamps]
-3. **Credential Integrity:** [Details with timestamps]
+1. **Deepfake Vectors:** [Synthesized narrative of deepfake events or "No synthetic anomalies identified."]
+2. **Phishing Operations:** [Synthesized narrative of malicious/suspicious URLs or "No credential harvest vectors found."]
+3. **Identity & Passwords:** [Status of passwords analyzed or "No breach exposures reported."]
 
 **Actionable Remediation**
-1. **[Immediate Action]:** [Technical mitigation step]
-2. **[Policy/Config Action]:** [Hardening guideline]
+1. **[Immediate Action]:** [Technical containment step]
+2. **[Hardening Step]:** [Infrastructure policy/MFA enforcement]"""
 
-Ensure each bullet and numbered item is on its own separate line."""
+        GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
 
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json"
         }
 
-       # CHANGE THIS BLOCK in main.py
         payload = {
-            "model": "openai/gpt-oss-120b", # <-- Officially recommended replacement
+            "model": "openai/gpt-oss-120b",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"User Request: {user_message}\n\nSystem Logs:\n{log_context}"}
+                {"role": "user", "content": f"User Request: {user_message}"}
             ],
             "temperature": 0.2,
             "max_tokens": 800
         }
-        response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=15)
-        
+
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=15
+        )
+
         if response.status_code == 200:
-            reply = response.json()["choices"][0]["message"]["content"]
-            return {"reply": reply}
-        elif response.status_code == 401:
-            return {"reply": "Cloud AI Error: API Key is invalid or expired."}
-        elif response.status_code == 429:
-            return {"reply": "Cloud AI Error: Rate limit exceeded. Please try again in a few seconds."}
-        else:
-            return {"reply": f"Cloud AI Error: {response.status_code} - {response.text}"}
+            return {"reply": response.json()["choices"][0]["message"]["content"]}
+        return {"reply": f"Cloud AI Error: {response.status_code} - {response.text}"}
 
     except Exception as e:
         return {"reply": f"Internal System Error: {str(e)}"}
-
 
 @app.get("/api/score")
 def api_score():
