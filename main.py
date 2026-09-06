@@ -703,9 +703,9 @@ Ensure each bullet and numbered item is on its own separate line."""
             "Content-Type": "application/json"
         }
 
-        # CHANGE THIS BLOCK in main.py
+       # CHANGE THIS BLOCK in main.py
         payload = {
-            "model": "llama-3.3-70b-versatile", # <-- Updated to the active 3.3 model
+            "model": "llama3-70b-8192", # <-- Updated to the universally stable model string
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"User Request: {user_message}\n\nSystem Logs:\n{log_context}"}
