@@ -716,14 +716,15 @@ CRITICAL UI RULE: NEVER use Markdown tables (e.g., | Column | Column |). The cha
             "Content-Type": "application/json"
         }
 
+        # CHANGE THIS BLOCK in main.py
         payload = {
             "model": "openai/gpt-oss-120b",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"User Request: {user_message}"}
+                {"role": "user", "content": f"User Request: {user_message}\n\nSystem Logs:\n{log_context}"}
             ],
             "temperature": 0.2,
-            "max_tokens": 800
+            "max_tokens": 2048  # <-- Increased to allow complete, detailed responses
         }
 
         response = requests.post(
