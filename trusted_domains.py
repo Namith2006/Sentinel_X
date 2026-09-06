@@ -31,6 +31,8 @@ TRUSTED_DOMAINS = {
     # ... inside trusted_domains.py
     "netflix.com", "spotify.com", "disneyplus.com", "primevideo.com", "twitch.tv",
     "wikipedia.org", "wikimedia.org", "medium.com", "reddit.com", "linkedin.com", "x.com", "twitter.com",
+    # Add these to your TRUSTED_DOMAINS set in trusted_domains.py
+    "khanacademy.org", "edx.org", "blackboard.com", "instructure.com", "quizlet.com",
     
     # Major Tech & Academic
     "mit.edu", "stanford.edu", "harvard.edu", "w3schools.com", "geeksforgeeks.org", "coursera.org", "udemy.com",

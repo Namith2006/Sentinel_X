@@ -37,6 +37,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+# --- WORKFLOW AUTOMATION ---
+# Automatically load API keys from a .env file so you don't have to manually enter them
+from dotenv import load_dotenv
+load_dotenv()
+
 # Project-local modules ---------------------------------------------------
 from crypto_ledger import SecurityLedger
 from deepfake_engine import analyze_image
@@ -219,56 +224,32 @@ def _coerce_url_payload(payload: dict | None, form_url: str | None) -> str:
 
 
 def _normalize_phishing(raw: dict, url: str) -> dict:
-    """Map the engine output to the field names the dashboard expects, with trusted domain verification."""
+    """Map the hybrid engine output directly to the dashboard format."""
     
-    # 1. Check against the comprehensive trusted domain registry
-    if is_trusted_domain(url):
-        return {
-            "url": url,
-            "is_phishing": False,
-            "phishing_risk_percent": "0.00%",
-            "risk_score": 0.0,
-            "status": "SAFE",
-            "reason": "Verified legitimate enterprise domain / trusted infrastructure.",
-            "details": raw,
-        }
-
-    # 2. Standard risk evaluation for all unverified / third-party URLs
-    is_phishing = bool(raw.get("is_phishing"))
-    risk_text = str(raw.get("phishing_risk_percent", "0%")).rstrip("%")
-    try:
-        risk_score = float(risk_text)
-    except ValueError:
-        risk_score = 0.0
+    is_phishing = bool(raw.get("is_phishing", False))
+    
+    # Handle both string percentages and float returns safely
+    risk_raw = raw.get("phishing_risk_percent", 0.0)
+    if isinstance(risk_raw, str):
+        risk_score = float(risk_raw.rstrip("%"))
+    else:
+        risk_score = float(risk_raw)
+        
     risk_score = max(0.0, min(100.0, risk_score))
 
-    if is_phishing or risk_score >= 70.0:
-        verdict = "phishing"
-    elif risk_score >= 35.0:
-        verdict = "suspicious"
-    else:
-        verdict = "safe"
-
-    reason_text = str(raw.get("status", "")).strip()
-    if not reason_text or ("safe" in reason_text.lower() and verdict != "safe"):
-        if verdict == "suspicious":
-            reason_text = "Unverified third-party domain or APK distributor detected."
-        elif verdict == "phishing":
-            reason_text = "Critical threat: Phishing or malicious heuristic patterns detected."
-        else:
-            reason_text = "Domain verified as safe."
+    # Pull the exact status and reasoning directly from the new phishing_engine.py
+    status = str(raw.get("status", "SAFE")).upper()
+    reason = str(raw.get("reason", "Domain analysis complete."))
 
     return {
         "url": url,
-        "is_phishing": verdict == "phishing",
+        "is_phishing": is_phishing,
         "phishing_risk_percent": f"{risk_score:.2f}%",
         "risk_score": risk_score,
-        "status": verdict.upper(),
-        "reason": reason_text,
+        "status": status,
+        "reason": reason,
         "details": raw,
     }
-
-
 def _normalize_image(raw: dict, filename: str) -> dict:
     """Map the deepfake engine output to the field names the dashboard expects."""
     
@@ -642,11 +623,11 @@ async def security_copilot_chat(request: Request):
         user_message = data.get("message", "").strip()
         user_logs = data.get("logs", [])
         
-        # 1. Properly initialize the Groq API key (ensures it works in Render and local)
+        # 1. API key is now automatically loaded via python-dotenv at the top of this file!
         GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
         
         if not GROQ_API_KEY or GROQ_API_KEY == "your_api_key_here":
-            return {"reply": "Cloud AI Error: Invalid API Key. Please configure your GROQ_API_KEY in the Render environment variables."}
+            return {"reply": "Cloud AI Error: Invalid API Key. Please verify your .env configuration."}
 
         # 2. Extract recent logs to give the AI context
         log_summary_lines = []
@@ -705,7 +686,6 @@ Ensure each bullet and numbered item is on its own separate line."""
             "Content-Type": "application/json"
         }
 
-        # 5. FIXED: Use a valid Meta Llama 3 model (The 'gpt-oss-20b' model caused the crash)
         payload = {
             "model": "llama-3.1-70b-versatile",
             "messages": [
