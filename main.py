@@ -705,7 +705,7 @@ Ensure each bullet and numbered item is on its own separate line."""
 
        # CHANGE THIS BLOCK in main.py
         payload = {
-            "model": "llama-3.1-8b-instant", # <-- The most stable, universally available model
+            "model": "openai/gpt-oss-120b", # <-- Officially recommended replacement
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"User Request: {user_message}\n\nSystem Logs:\n{log_context}"}
