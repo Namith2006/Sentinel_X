@@ -100,8 +100,8 @@ def analyze_url(url: str) -> dict:
 
     reasons = []
     ml_risk_score = 0.0
+    ml_benign = False
 
-    # 4. MACHINE LEARNING INFERENCE (GUARDED)
     # 4. MACHINE LEARNING INFERENCE (GUARDED)
     if model:
         try:
@@ -112,19 +112,21 @@ def analyze_url(url: str) -> dict:
             
             if prediction == 1:
                 reasons.append("ML Model flagged suspicious URL structure")
-                # Ensure the score is high enough to trigger the Phishing UI
                 ml_risk_score = max(ml_risk_score, 65.0) 
             else:
                 reasons.append("ML Model classified URL as benign")
-                # Cap the score at 20% so it doesn't trigger "Suspicious" unless the SSL check fails
                 ml_risk_score = min(ml_risk_score, 20.0)
+                ml_benign = True
         except Exception as ml_err:
             ml_risk_score = 10.0
             reasons.append(f"ML evaluation fallback: {str(ml_err)[:30]}")
     else:
         reasons.append("Rule-based heuristics active")
+        ml_benign = True
+
     # 5. DYNAMIC SSL/TLS VALIDATION (GUARDED)
     ssl_risk_penalty = 0.0
+    ssl_verified = False
     parsed = urlparse(url)
     hostname = (parsed.hostname or "").lower()
 
@@ -135,6 +137,7 @@ def analyze_url(url: str) -> dict:
                 with context.wrap_socket(sock, server_hostname=hostname) as ssock:
                     ssock.getpeercert()
                     reasons.append("Valid SSL Certificate verified")
+                    ssl_verified = True
         except ssl.SSLCertVerificationError:
             ssl_risk_penalty += 40.0
             reasons.append("Invalid, expired, or self-signed SSL/TLS certificate")
@@ -156,7 +159,12 @@ def analyze_url(url: str) -> dict:
     elif total_risk >= 35.0:
         status = "SUSPICIOUS"
     else:
-        status = "SAFE"
+        # The ultimate fix: Combine both verification factors
+        if ssl_verified and ml_benign:
+            status = "SAFE (Verified)"
+            total_risk = 0.0
+        else:
+            status = "SAFE"
 
     return {
         "is_phishing": is_phish,
