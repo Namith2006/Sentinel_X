@@ -1218,32 +1218,41 @@
         }
     }
 
-    function formatCopilotMessage(rawText) {
-        if (!rawText) return "";
+   function formatCopilotMessage(rawText) {
+    if (!rawText) return "";
 
-        let formatted = rawText
-            .replace(/\*\*(Posture Summary|Critical Findings|Actionable Remediation[^:]*)\*\*/gi, "\n\n### $1\n")
-            .replace(/\s*-\s*\*\*/g, "\n- **")
-            .replace(/\s*(\d+\.)\s*\*\*/g, "\n$1 **");
+    // 1. Normalize line endings
+    let text = rawText.replace(/\r\n/g, "\n").trim();
 
-        formatted = formatted.replace(/^### (.*$)/gim, '<h4 class="text-cyan-400 font-bold tracking-wide text-xs uppercase mt-3 mb-1 border-b border-cyan-500/20 pb-1">$1</h4>');
-        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong class="text-slate-100 font-semibold">$1</strong>');
-        formatted = formatted.replace(/^- (.*$)/gim, '<div class="flex items-start gap-1.5 ml-1 my-0.5 text-slate-300"><span class="text-cyan-400 leading-tight">•</span><span>$1</span></div>');
-        formatted = formatted.replace(/^(\d+)\. (.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1 text-slate-300"><span class="bg-cyan-500/20 text-cyan-300 text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30">$1</span><span>$2</span></div>');
+    // 2. Convert headers safely without crossing line breaks ([^\n*]* prevents runaway matching)
+    text = text.replace(/^\s*\*\*(Posture Summary|Critical Findings|Actionable Remediation[^\n*]*)\*\*:?\s*$/gim, "\n\n### $1\n");
+    text = text.replace(/\*\*(Posture Summary|Critical Findings|Actionable Remediation[^\n*]*)\*\*:?/gi, "\n\n### $1\n");
 
-        formatted = formatted
-            .split("\n\n")
-            .map(paragraph => {
-                const trimmed = paragraph.trim();
-                if (!trimmed) return "";
-                if (trimmed.startsWith("<h4") || trimmed.startsWith("<div")) return trimmed;
-                return `<p class="my-1 text-slate-300 leading-relaxed">${trimmed}</p>`;
-            })
-            .join("");
+    // 3. Render ### headers to styled cyan titles
+    text = text.replace(/^###\s*(.*?)\s*$/gim, '<h4 class="text-cyan-400 font-bold tracking-wide text-xs uppercase mt-4 mb-2 border-b border-cyan-500/20 pb-1">$1</h4>');
 
-        return formatted;
-    }
+    // 4. Convert **bold** tokens to <strong> tags
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-slate-100 font-semibold">$1</strong>');
 
+    // 5. Convert numbered items (1. item) into styled badge rows
+    text = text.replace(/^(\d+)\.\s+(.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1.5 text-slate-300"><span class="bg-cyan-500/20 text-cyan-300 text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 shrink-0 mt-0.5">$1</span><span class="flex-1 leading-relaxed">$2</span></div>');
+
+    // 6. Convert bullet points (- item or * item) into styled bullet rows
+    text = text.replace(/^[-*]\s+(.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1 text-slate-300"><span class="text-cyan-400 leading-tight shrink-0">•</span><span class="flex-1 leading-relaxed">$1</span></div>');
+
+    // 7. Wrap leftover paragraphs and preserve layout
+    let blocks = text.split(/\n\n+/);
+    text = blocks.map(block => {
+        let trimmed = block.trim();
+        if (!trimmed) return "";
+        if (trimmed.startsWith("<h4") || trimmed.startsWith("<div")) {
+            return trimmed;
+        }
+        return `<p class="my-1.5 text-slate-300 leading-relaxed">${trimmed}</p>`;
+    }).join("\n");
+
+    return text;
+}
     function appendAiResponse(text) {
         const chatMessages = $("chatMessages");
         const aiHtml = `
