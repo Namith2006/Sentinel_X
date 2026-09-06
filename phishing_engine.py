@@ -102,22 +102,27 @@ def analyze_url(url: str) -> dict:
     ml_risk_score = 0.0
 
     # 4. MACHINE LEARNING INFERENCE (GUARDED)
+    # 4. MACHINE LEARNING INFERENCE (GUARDED)
     if model:
         try:
             features = extract_features(url)
             prediction = model.predict(features)[0]
             probabilities = model.predict_proba(features)[0]
             ml_risk_score = float(probabilities[1] * 100)
+            
             if prediction == 1:
                 reasons.append("ML Model flagged suspicious URL structure")
+                # Ensure the score is high enough to trigger the Phishing UI
+                ml_risk_score = max(ml_risk_score, 65.0) 
             else:
                 reasons.append("ML Model classified URL as benign")
+                # Cap the score at 20% so it doesn't trigger "Suspicious" unless the SSL check fails
+                ml_risk_score = min(ml_risk_score, 20.0)
         except Exception as ml_err:
             ml_risk_score = 10.0
             reasons.append(f"ML evaluation fallback: {str(ml_err)[:30]}")
     else:
         reasons.append("Rule-based heuristics active")
-
     # 5. DYNAMIC SSL/TLS VALIDATION (GUARDED)
     ssl_risk_penalty = 0.0
     parsed = urlparse(url)
