@@ -3,5 +3,7 @@ uvicorn
 requests
 pydantic
 python-multipart
-xgboost
+python-dotenv
 scikit-learn
+joblib
+xgboost
