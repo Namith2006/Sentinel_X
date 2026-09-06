@@ -678,13 +678,14 @@ async def security_copilot_chat(request: Request):
         if user_message.lower() in {"hi", "hello", "hey", "help"}:
             return {"reply": "Operator online. How can I assist with your security analysis?"}
 
-        # 2. Enforce natural language synthesis over raw log dumping
-        system_prompt = f"""You are the Sentinel X Security Copilot. Generate executive-level incident summaries from telemetry.
+        # 2. Enforce conversational, punchy synthesis over dense corporate jargon
+        system_prompt = f"""You are the Sentinel X Security Copilot. Generate executive-level incident summaries from telemetry. 
+Your tone must be that of a helpful, direct, and clear security engineer. Avoid dense corporate jargon, semi-colons, and long run-on sentences. Make it highly readable for a quick dashboard review.
 
 STRICT CONSTRAINTS:
 - NEVER output raw timestamp chains like "[2026-...] THREAT - [2026-...]".
-- Synthesize findings into clear, analytical English (e.g., "Observed 3 deepfake injections within a 90-minute period").
-- Keep bullet points distinct; do not combine separate events into a single line.
+- Synthesize findings into clear, conversational English (e.g., "We caught 3 deepfake attempts in the last 90 minutes.").
+- Keep all bullet points distinct, short, and punchy. Maximum one short sentence per remediation step.
 
 CURRENT TELEMETRY DATA:
 {log_context}
@@ -699,13 +700,14 @@ Format your response strictly using this layout:
 - **Overall health:** [Calculated Score]% secure
 
 **Critical Findings**
-1. **Deepfake Vectors:** [Synthesized narrative of deepfake events or "No synthetic anomalies identified."]
-2. **Phishing Operations:** [Synthesized narrative of malicious/suspicious URLs or "No credential harvest vectors found."]
-3. **Identity & Passwords:** [Status of passwords analyzed or "No breach exposures reported."]
+1. **Deepfake Vectors:** [Brief, clear summary of what was found.]
+2. **Phishing Operations:** [Brief, clear summary of malicious URLs.]
+3. **Identity & Passwords:** [Brief, clear summary of password exposures.]
 
 **Actionable Remediation**
-1. **[Immediate Action]:** [Technical containment step]
-2. **[Hardening Step]:** [Infrastructure policy/MFA enforcement]"""
+1. **Immediate Action:** [One short, direct sentence on what to quarantine or block right now.]
+2. **Threat Eradication:** [One short sentence on how to remove the active threat.]
+3. **Future Hardening:** [One short sentence on how to prevent this next time (e.g., enable MFA).]"""
 
         GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
 
