@@ -267,6 +267,8 @@ def _normalize_phishing(raw: dict, url: str) -> dict:
         "reason": reason_text,
         "details": raw,
     }
+
+
 def _normalize_image(raw: dict, filename: str) -> dict:
     """Map the deepfake engine output to the field names the dashboard expects."""
     
@@ -349,6 +351,8 @@ def _normalize_image(raw: dict, filename: str) -> dict:
         "analyzed_via": analyzed_via,
         "details": raw,
     }
+
+
 SCREENSHOT_KEYWORDS = [
     "screenshot", "screen", "capture", "snip", "desktop", "display",
 ]
@@ -630,88 +634,102 @@ async def api_mitigate(payload: dict):
         "source": "llm" if isinstance(plan, dict) and "steps" in plan and plan["steps"] else "fallback",
     }
 
-import os
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
 
 @app.post("/api/chat")
 async def security_copilot_chat(request: Request):
-    data = await request.json()
-    user_message = data.get("message", "").strip()
-    user_logs = data.get("logs", [])
-
-    log_summary_lines = []
-    threat_count = 0
-    safe_count = 0
-
-    if user_logs:
-        for entry in user_logs[:25]:
-            status = str(entry.get("status", "")).upper()
-            vector = str(entry.get("vector", "")).upper()
-            ts = entry.get("ts", "N/A")
-
-            if "THREAT" in status or "COMPROMISED" in status:
-                threat_count += 1
-            elif "SAFE" in status or "STRONG" in status:
-                safe_count += 1
-
-            log_summary_lines.append(f"[{ts}] {vector}: {status}")
-
-        log_context = (
-            f"Total Logs Analyzed: {len(log_summary_lines)} "
-            f"(Threats/Compromised: {threat_count}, Safe/Verified: {safe_count})\n"
-            + "\n".join(log_summary_lines)
-        )
-    else:
-        log_context = "No system logs recorded yet."
-
-    if user_message.lower() in {"hi", "hello", "hey", "help"}:
-        return {"reply": "Operator online. How can I assist with your security analysis?"}
-
     try:
+        data = await request.json()
+        user_message = data.get("message", "").strip()
+        user_logs = data.get("logs", [])
+        
+        # 1. Properly initialize the Groq API key (ensures it works in Render and local)
+        GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
+        
+        if not GROQ_API_KEY or GROQ_API_KEY == "your_api_key_here":
+            return {"reply": "Cloud AI Error: Invalid API Key. Please configure your GROQ_API_KEY in the Render environment variables."}
+
+        # 2. Extract recent logs to give the AI context
+        log_summary_lines = []
+        threat_count = 0
+        safe_count = 0
+
+        if user_logs:
+            for entry in user_logs[:25]:
+                status = str(entry.get("status", "")).upper()
+                vector = str(entry.get("vector", "")).upper()
+                ts = entry.get("ts", "N/A")
+
+                if "THREAT" in status or "COMPROMISED" in status or "FAKE" in status or "PHISHING" in status:
+                    threat_count += 1
+                elif "SAFE" in status or "STRONG" in status or "AUTHENTIC" in status:
+                    safe_count += 1
+
+                log_summary_lines.append(f"[{ts}] {vector}: {status}")
+
+            log_context = (
+                f"Total Logs Analyzed: {len(log_summary_lines)} "
+                f"(Threats/Compromised: {threat_count}, Safe/Verified: {safe_count})\n"
+                + "\n".join(log_summary_lines)
+            )
+        else:
+            log_context = "No system logs recorded yet."
+
+        # 3. Simple greeting check
+        if user_message.lower() in {"hi", "hello", "hey", "help"}:
+            return {"reply": "Operator online. How can I assist with your security analysis?"}
+
+        # 4. Strict Formatting System Prompt
+        system_prompt = """You are the SentinelAI Security Copilot. Deliver structured, executive-ready threat telemetry reports.
+
+Always structure your responses using this EXACT layout with distinct double linebreaks:
+
+**Posture Summary**
+- **Total scans analyzed:** [Count]
+- **Threats/Compromised:** [Count] ([Percentage]%)
+- **Safe/Verified:** [Count] ([Percentage]%)
+- **Overall health:** [Score]% secure
+
+**Critical Findings**
+1. **Deepfake Threats:** [Details with timestamps]
+2. **Phishing Activity:** [Details with timestamps]
+3. **Credential Integrity:** [Details with timestamps]
+
+**Actionable Remediation**
+1. **[Immediate Action]:** [Technical mitigation step]
+2. **[Policy/Config Action]:** [Hardening guideline]
+
+Ensure each bullet and numbered item is on its own separate line."""
+
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json"
         }
 
+        # 5. FIXED: Use a valid Meta Llama 3 model (The 'gpt-oss-20b' model caused the crash)
         payload = {
-            "model": "openai/gpt-oss-20b",
+            "model": "llama-3.1-70b-versatile",
             "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are Sentinel X Copilot, an autonomous security intelligence assistant.\n\n"
-                        "Below is the complete telemetry from the user's security ledger:\n"
-                        f"{log_context}\n\n"
-                        "When requested to analyze logs or provide suggestions:\n"
-                        "1. **Posture Summary**: State total scans analyzed and overall health.\n"
-                        "2. **Critical Findings**: Summarize primary threat patterns (e.g., repeated phishing attempts, compromised passwords, deepfake media).\n"
-                        "3. **Actionable Remediation**: Provide 3 prioritized recovery and hardening steps.\n"
-                        "Keep the response formatted, concise, and professional."
-                    )
-                },
-                {"role": "user", "content": user_message}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"User Request: {user_message}\n\nSystem Logs:\n{log_context}"}
             ],
-            "max_tokens": 750,  
-            "temperature": 0.3
+            "temperature": 0.2,
+            "max_tokens": 800
         }
 
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=15
-        )
-
+        response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=15)
+        
         if response.status_code == 200:
-            ai_reply = response.json()["choices"][0]["message"]["content"]
-            return {"reply": ai_reply}
+            reply = response.json()["choices"][0]["message"]["content"]
+            return {"reply": reply}
+        elif response.status_code == 401:
+            return {"reply": "Cloud AI Error: API Key is invalid or expired."}
+        elif response.status_code == 429:
+            return {"reply": "Cloud AI Error: Rate limit exceeded. Please try again in a few seconds."}
         else:
-            return {"reply": f"Cloud AI Error: {response.json().get('error', {}).get('message', response.text)}"}
+            return {"reply": f"Cloud AI Error: {response.status_code} - {response.text}"}
 
-    except requests.exceptions.Timeout:
-        return {"reply": "⏳ Request timed out. Please check your network connection."}
     except Exception as e:
-        return {"reply": f"⚠️ Internal Error: {str(e)}"}
+        return {"reply": f"Internal System Error: {str(e)}"}
 
 
 @app.get("/api/score")

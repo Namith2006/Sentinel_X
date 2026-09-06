@@ -23,7 +23,19 @@ TRUSTED_DOMAINS = {
     "ebay.com", "flipkart.com", "walmart.com", "target.com",
 
     # Major Tech & Academic
-    "mit.edu", "stanford.edu", "harvard.edu", "w3schools.com", "geeksforgeeks.org", "coursera.org", "udemy.com"
+    "mit.edu", "stanford.edu", "harvard.edu", "w3schools.com", "geeksforgeeks.org", "coursera.org", "udemy.com",
+    # Add this section inside your TRUSTED_DOMAINS set in trusted_domains.py
+    # Major Tech, Academic & Science
+    "mit.edu", "stanford.edu", "harvard.edu", "w3schools.com", "geeksforgeeks.org", "coursera.org", "udemy.com",
+    "nature.com", "science.org", "springer.com", "cell.com", "ieee.org",
+    # ... inside trusted_domains.py
+    "netflix.com", "spotify.com", "disneyplus.com", "primevideo.com", "twitch.tv",
+    "wikipedia.org", "wikimedia.org", "medium.com", "reddit.com", "linkedin.com", "x.com", "twitter.com",
+    
+    # Major Tech & Academic
+    "mit.edu", "stanford.edu", "harvard.edu", "w3schools.com", "geeksforgeeks.org", "coursera.org", "udemy.com",
+    "nature.com" # <--- Add this here!
+
 }
 
 def extract_root_domain(url: str) -> str:
