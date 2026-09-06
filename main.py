@@ -706,7 +706,8 @@ A) If the user asks for a report, to "analyze logs", "summarize", or asks about 
 2. **Threat Eradication:** [One short sentence on how to remove the active threat.]
 3. **Future Hardening:** [One short sentence on how to prevent this next time.]
 
-B) If the user asks a general security question, asks for advice (e.g., "how to avoid risks", "what is a deepfake?"), or makes conversation, DO NOT use the Posture Summary layout. Instead, answer them directly and naturally. Use standard markdown, short paragraphs, and bullet points to provide expert, practical cybersecurity advice."""
+B) If the user asks a general security question, asks for advice (e.g., "how to avoid risks", "what is a deepfake?"), or makes conversation, DO NOT use the Posture Summary layout. Instead, answer them directly and naturally. 
+CRITICAL UI RULE: NEVER use Markdown tables (e.g., | Column | Column |). The chat UI cannot render them. Always use standard bullet points and short paragraphs to provide expert, practical cybersecurity advice."""
 
         GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
 
