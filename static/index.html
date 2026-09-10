@@ -104,6 +104,30 @@
 </head>
 <body class="bg-brand-dark text-slate-100 font-sans antialiased">
 
+    <!-- =================== NEW: ABOUT PROJECT MODAL =================== -->
+    <div id="aboutModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/90 backdrop-blur-sm p-4">
+        <div class="glass-strong border border-cyan-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-700">
+                <h3 class="text-sm font-bold text-cyan-400 flex items-center gap-2 uppercase tracking-wide">
+                    🛡️ About Sentinel X
+                </h3>
+                <button onclick="toggleAboutModal(false)" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            <div class="mt-4 space-y-3 text-sm text-slate-300 leading-relaxed">
+                <p>• <strong>Sentinel X</strong> is an AI-powered cybersecurity suite providing real-time threat intelligence and endpoint telemetry.</p>
+                <p>• <strong>Phishing Engine:</strong> Features a hybrid pipeline combining machine learning, URLhaus OSINT feeds, and dynamic SSL/TLS validation.</p>
+                <p>• <strong>Deepfake Engine:</strong> Inspects visual assets for generative artifacts, frequency noise, and compression anomalies.</p>
+                <p>• <strong>Ledger & AI:</strong> Evaluates password entropy, logs all scans into an immutable SHA-256 ledger, and uses Llama-3 AI to mitigate threats.</p>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button onclick="toggleAboutModal(false)" 
+                        class="px-5 py-2 bg-cyan-500 hover:bg-cyan-400 text-cyber-900 font-bold rounded-lg text-sm transition shadow-neon-cyan">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- =================== WEBAUTHN BIOMETRIC LOCK OVERLAY =================== -->
     <div id="lockScreen" class="fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/95">
         <div class="glass-strong max-w-md w-full mx-4 p-8 rounded-2xl text-center shadow-neon-cyan">
@@ -151,6 +175,12 @@
             </div>
 
             <div class="flex items-center gap-4 text-sm">
+                <!-- NEW: About Project Button -->
+                <button onclick="toggleAboutModal(true)" 
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10 transition font-medium text-xs md:text-sm">
+                    <span>ℹ️</span> <span class="hidden sm:inline">About Project</span>
+                </button>
+
                 <!-- Global Refresh Button -->
                 <button onclick="clearAll()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-400 border border-slate-700 transition" title="Clear all fields and results">
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -163,7 +193,7 @@
                     <span id="backendDot" class="led-dot led-offline"></span>
                     <span id="backendStatus" class="text-slate-400 font-mono">Backend: offline</span>
                 </div>
-                <div id="clock" class="text-slate-400 font-mono text-xs">--:--:--</div>
+                <div id="clock" class="text-slate-400 font-mono text-xs hidden md:block">--:--:--</div>
             </div>
         </header>
 
@@ -248,10 +278,18 @@
                        title="URL to scan for phishing threats"
                        aria-label="URL to scan for phishing threats"
                        class="w-full px-3 py-2 rounded-lg bg-cyber-700 border border-slate-700 focus:border-cyan-400 focus:outline-none text-sm font-mono">
-                <button type="button" onclick="scanUrl()"
-                        class="w-full mt-3 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-cyber-900 font-semibold text-sm transition">
-                    Scan Link
-                </button>
+                
+                <!-- NEW: Split Button Row for Scan Link and Clear Result -->
+                <div class="flex gap-2 mt-3">
+                    <button onclick="scanUrl()" class="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-cyber-900 font-bold rounded-lg transition text-sm">
+                        Scan Link
+                    </button>
+                    <button type="button" onclick="clearUrlResult()" 
+                            class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-semibold tracking-wide uppercase transition hover:text-white">
+                        Clear
+                    </button>
+                </div>
+                
                 <div id="urlResult" class="hidden mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono"></div>
             </div>
 
@@ -330,7 +368,6 @@
                     </div>
                     <span class="text-[10px] text-slate-500 font-mono">live · prepended</span>
                 </div>
-                <!-- ✨ NEW: SCROLLABLE WRAPPER & STICKY HEADER ✨ -->
                 <div class="overflow-y-auto max-h-[360px] overflow-x-hidden scrollbar-thin flex-1 pr-1">
                     <table class="w-full text-sm relative">
                         <thead class="text-xs uppercase text-slate-400 sticky top-0 bg-cyber-800 z-10 shadow-md">
@@ -386,12 +423,10 @@
 
         <!-- Chat Input Area -->
         <div class="p-3 border-t border-slate-700 bg-cyber-900/80 flex gap-2">
-            <!-- Added disabled styles to the input -->
             <input id="chatInput" type="text" placeholder="Type a security question..." 
                    class="flex-1 px-3 py-2 rounded-lg bg-cyber-700 border border-slate-600 focus:border-cyan-400 focus:outline-none text-xs font-mono text-slate-200 placeholder-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
                    onkeypress="if(event.key === 'Enter') sendChatMessage()">
             
-            <!-- Added ID 'chatSendBtn' and disabled styles to the button -->
             <button id="chatSendBtn" onclick="sendChatMessage()" title="Send Message" aria-label="Send Message" 
                     class="px-3 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-cyber-900 font-bold transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -404,7 +439,6 @@
     <!-- =================== JAVASCRIPT =================== -->
     <script>
     // ---------- CONFIG ----------
-    // Ensure this matches your actual Render Web Service URL (without a trailing slash)
     const API = "https://sentinel-x-vml9.onrender.com";
     const RP_NAME = "Sentinel X";
     const USER_ID = "sentinel-operator-001";
@@ -425,6 +459,21 @@
         const out = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
         return out;
+    }
+
+    // ---------- NEW: TOGGLE ABOUT MODAL ----------
+    function toggleAboutModal(show) {
+        const modal = $('aboutModal');
+        if (modal) {
+            modal.classList.toggle('hidden', !show);
+        }
+    }
+
+    // ---------- NEW: CLEAR URL RESULT BUTTON LOGIC ----------
+    function clearUrlResult() {
+        closeResult('urlResult', 'urlInput');
+        // Reset the engine dot indicator if desired
+        setEngine("phishing", "online"); 
     }
 
     // ---------- CLEARING FUNCTIONS ----------
@@ -651,7 +700,7 @@
     }
 
    async function refreshScore() {
-        // 1. Check if the backend is alive (Standard fetch without ngrok headers)
+        // 1. Check if the backend is alive
         try {
             const r = await fetch(`${API}/api/health`);
             setBackend(r.ok ? "online" : "offline");
@@ -744,7 +793,6 @@
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
                     <div class="text-xs text-rose-300/80 mt-1">${data.reason || "Phishing signal confirmed."}</div>`;
             } else if (isSuspicious) {
-                // NEW: Amber warning box for mid-tier risks
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-amber-500/10 border border-amber-500/40 text-amber-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Status:</strong> ⚠️ SUSPICIOUS</div>
@@ -801,7 +849,6 @@
             const formData = new FormData();
             formData.append("file", file);
 
-            // Removing headers completely allows the browser to properly set the multipart/form-data boundary
             const response = await fetch(`${API}/api/scan-image`, { 
                 method: "POST", 
                 body: formData 
@@ -810,7 +857,6 @@
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
 
-            // --- NEW: EXPLICIT ERROR INTERCEPTOR ---
             if (data.status === "SYSTEM MESSAGE" || data.error) {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
                 box.innerHTML = closeBtn + `
@@ -823,15 +869,13 @@
                         </ul>
                     </div>`;
                 setEngine("deepfake", "offline");
-                return; // Stop execution here so it doesn't draw the green box
+                return; 
             }
-            // ----------------------------------------
 
             const fakePct = Number(data.fake_confidence ?? data.fake ?? data.deepfake_probability ?? 0);
             const realPct = Number(data.real_confidence ?? data.real ?? (100 - fakePct));
             const isDeepfake = Boolean(data.is_fake ?? data.is_deepfake ?? (fakePct >= 50));
 
-            // Generate the HTML for the bullet points
             const signsHtml = (data.signs || []).map(sign => `<li class="ml-4 list-disc text-[11px] text-slate-400 mt-0.5">${sign}</li>`).join("");
 
             if (isDeepfake) {
@@ -1076,12 +1120,10 @@
         const okish = (status || "").toLowerCase().match(/safe|ok|strong|verified/);
         const color = okish ? "text-emerald-400" : "text-rose-400";
 
-        // --- NEW: Save to Local Browser Storage ---
         const saved = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
         saved.unshift({ ts, vector, hash, status, color });
         if (saved.length > 25) saved.length = 25; // keep max 25 rows
         localStorage.setItem("sentinel_ledger", JSON.stringify(saved));
-        // ------------------------------------------
 
         const newRow = document.createElement("tr");
         newRow.className = "border-b border-slate-800 row-flash";
@@ -1100,6 +1142,7 @@
         });
         while (tbody.children.length > 25) tbody.removeChild(tbody.lastChild);
     }
+    
     // ============================================================
     // 6) restoreLedger() - Rebuilds table on page refresh
     // ============================================================
@@ -1161,7 +1204,6 @@
 
         const chatMessages = $("chatMessages");
 
-        // Grab the actual dashboard logs from local storage
         const savedLogs = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
 
         isChatProcessing = true;
@@ -1218,41 +1260,42 @@
         }
     }
 
-   function formatCopilotMessage(rawText) {
-    if (!rawText) return "";
+    function formatCopilotMessage(rawText) {
+        if (!rawText) return "";
 
-    // 1. Normalize line endings
-    let text = rawText.replace(/\r\n/g, "\n").trim();
+        // 1. Normalize line endings
+        let text = rawText.replace(/\r\n/g, "\n").trim();
 
-    // 2. Convert headers safely without crossing line breaks ([^\n*]* prevents runaway matching)
-    text = text.replace(/^\s*\*\*(Posture Summary|Critical Findings|Actionable Remediation[^\n*]*)\*\*:?\s*$/gim, "\n\n### $1\n");
-    text = text.replace(/\*\*(Posture Summary|Critical Findings|Actionable Remediation[^\n*]*)\*\*:?/gi, "\n\n### $1\n");
+        // 2. Convert headers safely without crossing line breaks ([^\n*]* prevents runaway matching)
+        text = text.replace(/^\s*\*\*(Posture Summary|Critical Findings|Actionable Remediation[^\n*]*)\*\*:?\s*$/gim, "\n\n### $1\n");
+        text = text.replace(/\*\*(Posture Summary|Critical Findings|Actionable Remediation[^\n*]*)\*\*:?/gi, "\n\n### $1\n");
 
-    // 3. Render ### headers to styled cyan titles
-    text = text.replace(/^###\s*(.*?)\s*$/gim, '<h4 class="text-cyan-400 font-bold tracking-wide text-xs uppercase mt-4 mb-2 border-b border-cyan-500/20 pb-1">$1</h4>');
+        // 3. Render ### headers to styled cyan titles (CRITICAL BUG FIX APPLIED HERE)
+        text = text.replace(/^###\s*(.*?)\s*$/gim, '<h4 class="text-cyan-400 font-bold tracking-wide text-xs uppercase mt-4 mb-2 border-b border-cyan-500/20 pb-1">$1</h4>');
 
-    // 4. Convert **bold** tokens to <strong> tags
-    text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-slate-100 font-semibold">$1</strong>');
+        // 4. Convert **bold** tokens to <strong> tags
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-slate-100 font-semibold">$1</strong>');
 
-    // 5. Convert numbered items (1. item) into styled badge rows
-    text = text.replace(/^(\d+)\.\s+(.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1.5 text-slate-300"><span class="bg-cyan-500/20 text-cyan-300 text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 shrink-0 mt-0.5">$1</span><span class="flex-1 leading-relaxed">$2</span></div>');
+        // 5. Convert numbered items (1. item) into styled badge rows
+        text = text.replace(/^(\d+)\.\s+(.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1.5 text-slate-300"><span class="bg-cyan-500/20 text-cyan-300 text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 shrink-0 mt-0.5">$1</span><span class="flex-1 leading-relaxed">$2</span></div>');
 
-    // 6. Convert bullet points (- item or * item) into styled bullet rows
-    text = text.replace(/^[-*]\s+(.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1 text-slate-300"><span class="text-cyan-400 leading-tight shrink-0">•</span><span class="flex-1 leading-relaxed">$1</span></div>');
+        // 6. Convert bullet points (- item or * item) into styled bullet rows
+        text = text.replace(/^[-*]\s+(.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1 text-slate-300"><span class="text-cyan-400 leading-tight shrink-0">•</span><span class="flex-1 leading-relaxed">$1</span></div>');
 
-    // 7. Wrap leftover paragraphs and preserve layout
-    let blocks = text.split(/\n\n+/);
-    text = blocks.map(block => {
-        let trimmed = block.trim();
-        if (!trimmed) return "";
-        if (trimmed.startsWith("<h4") || trimmed.startsWith("<div")) {
-            return trimmed;
-        }
-        return `<p class="my-1.5 text-slate-300 leading-relaxed">${trimmed}</p>`;
-    }).join("\n");
+        // 7. Wrap leftover paragraphs and preserve layout
+        let blocks = text.split(/\n\n+/);
+        text = blocks.map(block => {
+            let trimmed = block.trim();
+            if (!trimmed) return "";
+            if (trimmed.startsWith("<h4") || trimmed.startsWith("<div")) {
+                return trimmed;
+            }
+            return `<p class="my-1.5 text-slate-300 leading-relaxed">${trimmed}</p>`;
+        }).join("\n");
 
-    return text;
-}
+        return text;
+    }
+
     function appendAiResponse(text) {
         const chatMessages = $("chatMessages");
         const aiHtml = `
@@ -1265,6 +1308,7 @@
         chatMessages.insertAdjacentHTML("beforeend", aiHtml);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
+
     // ---------- INIT ----------
     $("registerBtn").addEventListener("click", registerPasskey);
     $("unlockBtn").addEventListener("click", authenticatePasskey);
