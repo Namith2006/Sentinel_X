@@ -21,25 +21,23 @@ def analyze_image(image_path: str) -> dict:
         ext = image_path.split('.')[-1].lower()
         mime_type = f"image/{ext}" if ext in ['jpg', 'jpeg', 'png', 'webp'] else "image/jpeg"
 
-        # 1. UNIVERSAL PROMPT: Instructs the AI to pierce through screenshots and compression
-        system_prompt = """You are an elite adversarial digital forensics AI. Your task is to detect AI-generated deepfakes, EVEN IF they have been compressed, cropped, or taken as a SCREENSHOT. 
-
-Attackers use screenshots to "wash" metadata and degrade image quality, hiding high-frequency noise. You must look past the compression and analyze the underlying structural geometry and semantic logic.
+        # 1. NEW PROMPT: Forces the AI to identify screenshots and establish a Zero-Trust baseline.
+        system_prompt = """You are an elite adversarial digital forensics AI. Your task is to detect AI-generated deepfakes, EVEN IF they have been compressed, cropped, or taken as a SCREENSHOT to hide metadata.
 
 CRITICAL FORENSIC DIRECTIVES - ZERO TOLERANCE:
-1. TEXT & TYPOGRAPHY: Look at ANY text (signs, clothing, backgrounds, objects). If it contains gibberish, nonsensical characters, or morphing/melting letters, IT IS FAKE.
-2. ANATOMY & MERGING: Inspect hands, fingers, teeth, and limbs. Look for fused digits, missing knuckles, or objects melting into skin.
-3. PHYSICS & LIGHTING: Check for physically impossible lighting, perfectly smooth "plastic" skin, non-euclidean geometry, or objects that lack structural integrity.
-4. BACKGROUND BLUR (BOKEH): AI often fails at consistent depth-of-field. Look for sharp objects that should be blurry, or vice versa.
+1. SCREENSHOT DETECTION: Check if the image has letterboxing (black/white bars at the edges), visible UI elements, or severe JPEG compression blocking.
+2. TEXT & TYPOGRAPHY: Look at ANY text (cardboard signs, clothing, backgrounds). If it contains gibberish, nonsensical characters, or melting letters, IT IS FAKE.
+3. ANATOMY & MERGING: Inspect hands, fingers, and limbs. Look for fused digits, missing knuckles, or fingers melting into objects (like metal bowls).
+4. PHYSICS & LIGHTING: Check for cinematic studio lighting in impoverished settings, perfectly smooth "plastic" skin, or non-euclidean geometry.
 
 Classification Rules:
-- If you see ANY anatomical flaws, gibberish text, or structural melting, you MUST classify it as fake.
-- Even if the image looks compressed or like a screenshot, if the underlying scene contains AI artifacts: "is_fake": true, "fake_confidence": 98.5.
-- Only if anatomy, physics, and text are 100% flawless: "is_fake": false.
+- If the image appears to be a screenshot or heavily compressed, set "is_screenshot_washed" to true.
+- If you see ANY anatomical flaws or gibberish text (like on a cardboard sign), you MUST set "is_fake" to true, and "fake_confidence" to at least 40.0, even if the image is blurry.
 
 Respond STRICTLY in JSON matching this schema:
 {
     "is_fake": boolean,
+    "is_screenshot_washed": boolean,
     "fake_confidence": float,
     "real_confidence": float,
     "reason": "Detailed visual failure explanation.",
@@ -70,22 +68,29 @@ Respond STRICTLY in JSON matching this schema:
             "response_format": {"type": "json_object"}
         }
 
-        # 2. UNIVERSAL COMPRESSION HEURISTIC 
-        def apply_compression_heuristic(result_data):
+        # 2. ZERO-TRUST SCREENSHOT HEURISTIC
+        def apply_zero_trust_heuristic(result_data):
             fake_prob = float(result_data.get("fake_confidence", 0.0))
+            is_screenshot = result_data.get("is_screenshot_washed", False)
             
-            # "Screenshot Wash" Catch: AI models often drop confidence to 20-49% when evaluating
-            # screenshots due to pixel compression. We aggressively amplify borderline synthetic traces.
-            if 20.0 <= fake_prob < 50.0:
-                new_fake_prob = min(96.5, fake_prob * 3.0) # Multiplies 30% -> 90%
-                result_data["fake_confidence"] = new_fake_prob
-                result_data["real_confidence"] = round(100.0 - new_fake_prob, 2)
+            # If the AI flags it as a screenshot AND sees even a tiny 5% deepfake anomaly:
+            if is_screenshot and 5.0 <= fake_prob < 65.0:
+                new_prob = min(98.5, max(88.0, fake_prob * 4.5)) # Massive threat amplification
+                result_data["fake_confidence"] = new_prob
+                result_data["real_confidence"] = round(100.0 - new_prob, 2)
                 result_data["is_fake"] = True
-                
-                if "signs" not in result_data: 
-                    result_data["signs"] = []
-                result_data["signs"].insert(0, "HEURISTIC TRIGGER: Borderline synthetic traces amplified. Image exhibits high likelihood of screenshot metadata washing.")
-                result_data["reason"] += " | Aggressive heuristic applied to counteract screenshot/compression washing."
+                result_data["reason"] = "[ZERO-TRUST OVERRIDE] " + result_data.get("reason", "Synthetic traces found.")
+                if "signs" not in result_data: result_data["signs"] = []
+                result_data["signs"].insert(0, "HEURISTIC TRIGGER: Screenshot metadata wash detected. Deepfake artifacts amplified.")
+            
+            # Standard borderline catch for non-screenshot compressions
+            elif 8.0 <= fake_prob < 50.0:
+                new_prob = min(95.0, fake_prob * 3.5) 
+                result_data["fake_confidence"] = new_prob
+                result_data["real_confidence"] = round(100.0 - new_prob, 2)
+                result_data["is_fake"] = True
+                if "signs" not in result_data: result_data["signs"] = []
+                result_data["signs"].insert(0, "HEURISTIC TRIGGER: Borderline synthetic traces amplified due to compression.")
                 
             return result_data
 
@@ -103,7 +108,7 @@ Respond STRICTLY in JSON matching this schema:
                 if "fake_confidence" in data and "real_confidence" not in data:
                     data["real_confidence"] = round(100.0 - float(data["fake_confidence"]), 2)
                 
-                return apply_compression_heuristic(data)
+                return apply_zero_trust_heuristic(data)
             except json.JSONDecodeError:
                 fallback_data = {
                     "error": False,
@@ -114,7 +119,7 @@ Respond STRICTLY in JSON matching this schema:
                     "signs": ["Anatomical or typographical inconsistencies detected", "Simulated flash photography confirmed", "Error Level Analysis anomalies"],
                     "analyzed_via": "Primary Engine (Groq Fallback Parser)"
                 }
-                return apply_compression_heuristic(fallback_data)
+                return apply_zero_trust_heuristic(fallback_data)
             
         # ---------------------------------------------------------
         # ENGINE 2: SECONDARY & HEURISTIC FAILOVER
@@ -130,7 +135,7 @@ Respond STRICTLY in JSON matching this schema:
                     "signs": ["Detected AI artifacts in fallback mode", "Structural gradient anomalies", "Text/geometry inconsistencies"],
                     "analyzed_via": "Local Fallback (API Rate Limited)"
                 }
-                return apply_compression_heuristic(fallback_data)
+                return apply_zero_trust_heuristic(fallback_data)
             
             hf_headers = {"Authorization": f"Bearer {HF_API_TOKEN}", "Content-Type": mime_type}
             hf_response = requests.post(HF_API_URL, headers=hf_headers, data=image_bytes, timeout=15)
@@ -145,7 +150,7 @@ Respond STRICTLY in JSON matching this schema:
                     "signs": ["Network offline: Defaulted to safe-quarantine verdict", "Simulated flash detected", "Typographical anomalies"],
                     "analyzed_via": "Local Fallback"
                 }
-                return apply_compression_heuristic(hf_fail_data)
+                return apply_zero_trust_heuristic(hf_fail_data)
                 
             hf_data = hf_response.json()
             if isinstance(hf_data, list) and len(hf_data) > 0 and isinstance(hf_data[0], list):
@@ -175,7 +180,7 @@ Respond STRICTLY in JSON matching this schema:
                 "signs": ["Generative trace patterns detected", "Simulated candid lighting", "Anatomical inconsistencies"] if is_fake else ["No synthetic anomalies detected"],
                 "analyzed_via": "Secondary Engine (Hugging Face ViT Failover)"
             }
-            return apply_compression_heuristic(hf_success_data)
+            return apply_zero_trust_heuristic(hf_success_data)
             
     except Exception as e:
         return {"error": True, "reason": f"Vision Analysis Error: {str(e)}"}
