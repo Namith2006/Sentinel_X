@@ -7,3 +7,4 @@ python-dotenv
 scikit-learn
 joblib
 xgboost
+Pillow>=10.0.0
