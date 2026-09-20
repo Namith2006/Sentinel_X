@@ -18,7 +18,7 @@ class TrueForensicEnsemble:
         self.signs = []
         
     def analyze_container(self, img):
-        """Step 1: Container Labeling (No Suppression Triggers)"""
+        """Step 1: Container Labeling"""
         exif = img.getexif()
         has_metadata = bool(exif and (0x010f in exif or 0x0110 in exif))
         
@@ -92,26 +92,34 @@ class TrueForensicEnsemble:
         return self.features.get('math_threat', 0.0)
 
     def fuse_and_classify(self, cnn_threat):
-        """Step 4: AI-First Additive Fusion"""
+        """Step 4: The Weighted Veto (Soft Veto) Fusion"""
         math_threat = float(self.features['math_threat'])
         is_screenshot = bool(self.features['is_screenshot'])
 
-        # AI is the indisputable baseline
+        # AI is the baseline
         base_score = cnn_threat
-        
-        # Math acts as a confidence modifier (-15% to +15% impact on the AI's score)
-        math_influence = (math_threat - 50.0) * 0.3 
+        multiplier = 1.0
 
-        if is_screenshot and math_influence < 0:
-            # If it's a screenshot, the math will naturally look "real" due to compression.
-            # We halve the mathematical penalty so it doesn't drag down a correct CNN detection.
-            math_influence *= 0.5
-            self.signs.append(f"AI-First Fusion: Screenshot detected. Math penalty softened to {round(math_influence, 1)}%.")
+        if is_screenshot:
+            if math_threat > 50.0:
+                multiplier = 1.0
+                self.signs.append(f"Weighted Veto: Math confirms AI ({round(math_threat, 1)}%). Multiplier: 1.0x.")
+            elif math_threat > 35.0:
+                # Moderate threshold: Math is unsure. Slight penalty to AI.
+                multiplier = 0.85
+                self.signs.append(f"Weighted Veto: Math is moderate ({round(math_threat, 1)}%). Multiplier: 0.85x.")
+            else:
+                # Very Low threshold (< 35%): Math strongly suggests REAL. Heavy penalty to counter hallucination.
+                multiplier = 0.5
+                self.signs.append(f"Weighted Veto: Math strongly suggests REAL ({round(math_threat, 1)}%). Throttling CNN hallucination. Multiplier: 0.5x.")
         else:
-            modifier_type = "bonus" if math_influence >= 0 else "penalty"
-            self.signs.append(f"AI-First Fusion: Math applied a {round(math_influence, 1)}% {modifier_type} to CNN base score.")
+            # Native image. Trust the AI heavily, but apply a tiny sanity check if math is completely clean.
+            if math_threat < 20.0:
+                multiplier = 0.9
+                self.signs.append(f"Weighted Veto: Native image with very low math threat. Multiplier: 0.9x.")
 
-        fused_score = max(0.0, min(100.0, base_score + math_influence))
+        # Apply multiplier and lock bounds
+        fused_score = max(0.0, min(100.0, base_score * multiplier))
         is_fake = bool(fused_score >= 50.0)
 
         # 4-Class Matrix
@@ -128,7 +136,7 @@ class TrueForensicEnsemble:
             classification = "1_Real_Native"
             desc = "Authentic camera photograph"
             
-        reason = f"[{classification.upper()}] Additive Fusion: CNN Base ({round(base_score, 1)}%) modified by Spatial Math ({round(math_influence, 1)}%). Final probability: {round(fused_score, 1)}%."
+        reason = f"[{classification.upper()}] Weighted Veto Fusion: CNN Base ({round(base_score, 1)}%) applied with {multiplier}x Multiplier based on Spatial Math ({round(math_threat, 1)}%). Final probability: {round(fused_score, 1)}%."
             
         return classification, desc, fused_score, reason
 
@@ -180,7 +188,7 @@ def analyze_image(image_path: str) -> dict:
             "reason": str(reason),
             "signs": ensemble.signs,
             "detailed_analysis": ensemble.features,
-            "analyzed_via": "Sentinel X AI-First Additive Fusion"
+            "analyzed_via": "Sentinel X Weighted Veto Fusion"
         }
 
     except Exception as e:
