@@ -20,11 +20,9 @@ class TrueForensicEnsemble:
         
     def analyze_container(self, img, cv_img):
         """Step 1: Determine if the image is a raw file or a compressed screenshot/messaging app file."""
-        # Check EXIF
         exif = img.getexif()
         has_metadata = bool(exif and (0x010f in exif or 0x0110 in exif))
         
-        # Check ELA Compression
         try:
             temp_io = io.BytesIO()
             img.save(temp_io, 'JPEG', quality=90)
@@ -39,23 +37,22 @@ class TrueForensicEnsemble:
             self.signs.append("Container Analysis: Image lacks native metadata or exhibits uniform recompression (Screenshot/WhatsApp).")
 
     def calculate_math_threat(self, cv_img):
-        """Step 2: Calculate unnatural AI smoothness and pixel entropy."""
+        """Step 2: Recalibrated Spatial Math for Mobile Photography."""
         gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
         
-        # 1. Laplacian Variance (Optical Noise vs AI Plastic Smoothness)
-        lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-        # Scale: 800+ is highly textured (Real), <200 is overly smooth (AI)
-        smoothness_threat = max(0.0, min(100.0, (800 - lap_var) / 6.0))
+        # 1. Laplacian Variance
+        # Recalibrated from 800 down to 300 to forgive standard smartphone skin-smoothing/noise-reduction.
+        lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+        smoothness_threat = max(0.0, min(100.0, (300.0 - lap_var) / 3.0))
         
-        # 2. Pixel Entropy (Information Density)
+        # 2. Pixel Entropy
+        # Recalibrated from 7.5 down to 7.2 to forgive WhatsApp JPEG compression flattening.
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
         hist = hist.ravel() / (hist.sum() + 1e-7)
-        entropy = -np.sum(hist * np.log2(hist + 1e-7))
-        # Scale: >7.5 is natural chaos (Real), <6.5 is uniform distribution (AI)
-        entropy_threat = max(0.0, min(100.0, (7.5 - entropy) * 100))
+        entropy = float(-np.sum(hist * np.log2(hist + 1e-7)))
+        entropy_threat = max(0.0, min(100.0, (7.2 - entropy) * 100.0))
         
-        # Mathematical AI Threat Score (0 to 100)
-        math_threat = (smoothness_threat * 0.5) + (entropy_threat * 0.5)
+        math_threat = float((smoothness_threat * 0.5) + (entropy_threat * 0.5))
         self.features['math_threat'] = math_threat
         self.signs.append(f"Spatial Analysis: Entropy and variance math yielded {round(math_threat, 1)}% synthetic probability.")
 
@@ -74,7 +71,7 @@ class TrueForensicEnsemble:
                     data = data[0]
                 for item in data:
                     if "fake" in str(item.get("label", "")).lower() or "artificial" in str(item.get("label", "")).lower():
-                        cnn_score = float(item.get("score", 0.0)) * 100
+                        cnn_score = float(item.get("score", 0.0)) * 100.0
                         self.signs.append(f"CNN Analysis: ViT Network identified {round(cnn_score, 1)}% synthetic markers.")
                         return cnn_score
             else:
@@ -82,37 +79,46 @@ class TrueForensicEnsemble:
         except Exception:
             self.signs.append("CNN Analysis: Connection timeout.")
             
-        return self.features['math_threat'] # Fallback safely to math if API drops
+        return self.features['math_threat']
 
     def fuse_and_classify(self, cnn_threat):
-        """Step 4: True Sensor Fusion Ensemble."""
-        math_threat = self.features['math_threat']
-        is_screenshot = self.features['is_screenshot']
+        """Step 4: True Sensor Fusion with Hallucination Dampener."""
+        math_threat = float(self.features['math_threat'])
+        is_screenshot = bool(self.features['is_screenshot'])
         
-        # Weighted Ensemble: If the image is a screenshot, compression obscures the CNN's vision.
-        # We mathematically shift a portion of the weight to the spatial/entropy math.
         if is_screenshot:
-            fused_score = (cnn_threat * 0.6) + (math_threat * 0.4)
-        else:
-            fused_score = (cnn_threat * 0.85) + (math_threat * 0.15)
+            # HALLUCINATION DAMPENER:
+            # If spatial math sees healthy optical noise (< 45% threat), 
+            # we forcefully throttle the CNN to stop it from panicking over WhatsApp compression.
+            if math_threat < 45.0:
+                adjusted_cnn = cnn_threat * 0.35 
+                self.signs.append(f"Fusion Override: CNN confidence throttled from {round(cnn_threat,1)}% to {round(adjusted_cnn,1)}% due to healthy optical noise.")
+                cnn_threat = adjusted_cnn
             
-        is_fake = fused_score >= 50.0
+            # Make spatial math the dominant decision maker for compressed media (70% weight)
+            fused_score = (cnn_threat * 0.3) + (math_threat * 0.7)
+        else:
+            # For raw native images, trust the CNN more
+            fused_score = (cnn_threat * 0.7) + (math_threat * 0.3)
+            
+        is_fake = bool(fused_score >= 50.0)
 
-        # Determine the 4-Class matrix categorization naturally
+        # 4-Class Matrix
         if is_screenshot and is_fake:
             classification = "4_AI_Screenshot"
             desc = "Screenshot / Compressed AI-generated image"
         elif is_screenshot and not is_fake:
             classification = "2_Real_Screenshot"
             desc = "Screenshot / Compressed authentic photograph"
+            fused_score = min(34.0, fused_score) # Cap safe screenshots so UI stays green
         elif is_fake and not is_screenshot:
             classification = "3_AI_Native"
             desc = "Direct AI-generated media"
         else:
             classification = "1_Real_Native"
             desc = "Authentic camera photograph"
+            fused_score = min(34.0, fused_score)
             
-        # Generate a professional, dynamic forensic report based on the actual math
         reason = f"[{classification.upper()}] Forensic Ensemble Analysis: Convolutional network assessed {round(cnn_threat, 1)}% synthetic threat, corroborated by {round(math_threat, 1)}% spatial entropy threat. Final fused probability: {round(fused_score, 1)}%."
             
         return classification, desc, fused_score, reason
@@ -122,10 +128,8 @@ class TrueForensicEnsemble:
 # ==========================================
 def analyze_image(image_path: str) -> dict:
     try:
-        # 1. Load and Optimize Image
         with Image.open(image_path) as orig_img:
             img = orig_img.convert('RGB')
-            # Compress to prevent memory exhaustion
             processing_img = img.copy()
             processing_img.thumbnail((1024, 1024))
             buf = io.BytesIO()
@@ -134,31 +138,27 @@ def analyze_image(image_path: str) -> dict:
 
         cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
-        # 2. Execute True Forensic Ensemble
         ensemble = TrueForensicEnsemble(image_path)
-        
         ensemble.analyze_container(img, cv_img)
         ensemble.calculate_math_threat(cv_img)
         
-        # Memory cleanup before API call
         del cv_img
         gc.collect()
 
         cnn_threat = ensemble.query_cnn_threat(image_bytes)
-        
         classification, desc, fused_score, reason = ensemble.fuse_and_classify(cnn_threat)
 
         return {
             "error": False,
             "classification": classification,
             "description": desc,
-            "is_fake": fused_score >= 50.0,
-            "fake_confidence": round(fused_score, 1),
-            "real_confidence": round(100.0 - fused_score, 1),
-            "reason": reason,
+            "is_fake": bool(fused_score >= 50.0),
+            "fake_confidence": float(fused_score),
+            "real_confidence": float(100.0 - fused_score),
+            "reason": str(reason),
             "signs": ensemble.signs,
             "detailed_analysis": ensemble.features,
-            "analyzed_via": "Sentinel X True Sensor Fusion Ensemble"
+            "analyzed_via": "Sentinel X Sensor Fusion (With Hallucination Dampener)"
         }
 
     except Exception as e:
