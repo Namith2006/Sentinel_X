@@ -31,34 +31,39 @@ class TrueForensicEnsemble:
         except Exception:
             ela_score = 0.0
 
-        # ELA is now strictly a container label, never a suppression trigger
         self.features['is_screenshot'] = not has_metadata or ela_score > 8.0
         if self.features['is_screenshot']:
             self.signs.append("Container Analysis: Image lacks native metadata or exhibits uniform recompression (Screenshot/WhatsApp).")
 
     def calculate_math_threat(self, cv_img):
-        """Step 2: Spatial & Frequency Math (Laplacian, Entropy, FFT)."""
+        """Step 2: Calibrated Spatial & Frequency Math (Laplacian, Entropy, FFT Ratio)."""
         gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
         
-        # 1. Laplacian Variance (Texture/Smoothness)
+        # 1. Laplacian Variance (Texture/Smoothness) - Calibrated for mobile
         lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-        smoothness_threat = max(0.0, min(100.0, (500.0 - lap_var) / 5.0))
+        smoothness_threat = max(0.0, min(100.0, (300.0 - lap_var) / 3.0))
         
-        # 2. Pixel Entropy (Information Density)
+        # 2. Pixel Entropy (Information Density) - Calibrated for compression
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
         hist = hist.ravel() / (hist.sum() + 1e-7)
         entropy = float(-np.sum(hist * np.log2(hist + 1e-7)))
-        entropy_threat = max(0.0, min(100.0, (7.5 - entropy) * 100.0))
+        entropy_threat = max(0.0, min(100.0, (7.0 - entropy) * 100.0))
         
-        # 3. Fast Fourier Transform (FFT) for Gen-AI checkerboard artifacts
+        # 3. Fast Fourier Transform (High-Frequency Energy Ratio)
         roi = cv2.resize(gray, (256, 256))
         f = np.fft.fft2(roi)
         fshift = np.fft.fftshift(f)
-        mag = 20 * np.log(np.abs(fshift) + 1e-7)
-        fft_mean = float(np.mean(mag))
+        mag = np.abs(fshift)
         
-        # Generative models often lack natural high-frequency optical distribution
-        fft_threat = max(0.0, min(100.0, (145.0 - fft_mean) * 2.0))
+        # Calculate total energy vs low-frequency energy (center 30x30 pixels)
+        total_energy = float(np.sum(mag)) + 1e-7
+        low_freq_energy = float(np.sum(mag[128-15:128+15, 128-15:128+15]))
+        high_freq_energy = total_energy - low_freq_energy
+        
+        # Natural images have a healthy distribution of high-frequency noise.
+        # Deepfakes are unnaturally smooth in the frequency domain.
+        hf_ratio = (high_freq_energy / total_energy) * 100.0
+        fft_threat = max(0.0, min(100.0, (8.0 - hf_ratio) * 12.5))
         
         # Average the three spatial/frequency components
         math_threat = float((smoothness_threat + entropy_threat + fft_threat) / 3.0)
@@ -100,8 +105,8 @@ class TrueForensicEnsemble:
             # Screenshots destroy optical pixel noise. Rely on the semantic CNN (80/20 split).
             fused_score = (cnn_threat * 0.8) + (math_threat * 0.2)
         else:
-            # Native images retain sensor noise. Balance the ensemble (70/30 split).
-            fused_score = (cnn_threat * 0.7) + (math_threat * 0.3)
+            # Boosted CNN weight for Native images (85/15 split).
+            fused_score = (cnn_threat * 0.85) + (math_threat * 0.15)
             
         is_fake = bool(fused_score >= 50.0)
 
@@ -133,7 +138,6 @@ def analyze_image(image_path: str) -> dict:
             cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
             # --- PRE-PROCESSING: CLAHE Edge Enhancement ---
-            # Extract LAB color space to enhance the Lightness channel without distorting colors
             lab = cv2.cvtColor(cv_img, cv2.COLOR_BGR2LAB)
             l_channel, a_channel, b_channel = cv2.split(lab)
             
@@ -141,12 +145,11 @@ def analyze_image(image_path: str) -> dict:
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
             cl = clahe.apply(l_channel)
             
-            # Merge and convert back to RGB for the CNN
             merged = cv2.merge((cl, a_channel, b_channel))
             enhanced_bgr = cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
             enhanced_rgb = cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB)
             
-            # Downsample enhanced image to avoid memory exhaustion and API payload limits
+            # Downsample enhanced image to avoid memory exhaustion
             enhanced_pil = Image.fromarray(enhanced_rgb)
             enhanced_pil.thumbnail((1024, 1024))
             buf = io.BytesIO()
@@ -156,10 +159,7 @@ def analyze_image(image_path: str) -> dict:
         # Initialize Ensemble
         ensemble = TrueForensicEnsemble(image_path)
         
-        # Analyze container on the original image (pre-CLAHE)
         ensemble.analyze_container(img)
-        
-        # Calculate Math Threat on the original un-enhanced BGR image
         ensemble.calculate_math_threat(cv_img)
         
         del cv_img
@@ -168,7 +168,6 @@ def analyze_image(image_path: str) -> dict:
         # Query CNN using the CLAHE-enhanced image bytes
         cnn_threat = ensemble.query_cnn_threat(cnn_image_bytes)
         
-        # Fuse scores without artificial UI caps
         classification, desc, fused_score, reason = ensemble.fuse_and_classify(cnn_threat)
 
         return {
@@ -181,7 +180,7 @@ def analyze_image(image_path: str) -> dict:
             "reason": str(reason),
             "signs": ensemble.signs,
             "detailed_analysis": ensemble.features,
-            "analyzed_via": "Sentinel X Advanced Sensor Fusion"
+            "analyzed_via": "Sentinel X Calibrated Sensor Fusion"
         }
 
     except Exception as e:
