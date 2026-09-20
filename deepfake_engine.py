@@ -96,18 +96,28 @@ class TrueForensicEnsemble:
         return self.features.get('math_threat', 0.0)
 
     def fuse_and_classify(self, cnn_threat):
-        """Step 4: True Uncapped Sensor Fusion."""
+        """Step 4: True Uncapped Sensor Fusion with Sanity Check."""
         math_threat = float(self.features['math_threat'])
         is_screenshot = bool(self.features['is_screenshot'])
-        
-        # Dynamic Fusion Weights based on Container
-        if is_screenshot:
-            # Screenshots destroy optical pixel noise. Rely on the semantic CNN (80/20 split).
-            fused_score = (cnn_threat * 0.8) + (math_threat * 0.2)
+
+        # --- SANITY CHECK ---
+        # If it's a screenshot and the math strongly suggests it's REAL (< 30%),
+        # the CNN is likely hallucinating due to WhatsApp compression artifacts.
+        # We throttle the CNN to prevent false positives.
+        if is_screenshot and math_threat < 30.0:
+            self.signs.append(f"Sanity Check: Math threat is very low ({round(math_threat,1)}%). Throttling CNN to prevent compression-based hallucination.")
+            cnn_weight = 0.4
+            math_weight = 0.6
+        elif is_screenshot:
+            # Standard screenshot: Rely more on semantic CNN
+            cnn_weight = 0.8
+            math_weight = 0.2
         else:
-            # Boosted CNN weight for Native images (85/15 split).
-            fused_score = (cnn_threat * 0.85) + (math_threat * 0.15)
-            
+            # Native image: Boosted CNN weight
+            cnn_weight = 0.85
+            math_weight = 0.15
+
+        fused_score = (cnn_threat * cnn_weight) + (math_threat * math_weight)
         is_fake = bool(fused_score >= 50.0)
 
         # 4-Class Matrix (Uncapped)
