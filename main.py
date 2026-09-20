@@ -13,13 +13,9 @@ Endpoints (all mounted under /api):
     GET  /api/ledger          - Full SHA-256 cryptographic ledger
     GET  /api/health          - Health check
     GET  /                    - Serves the static HTML dashboard
-
-Every scan is appended to the SHA-256 SecurityLedger so the gauge and
-ledger table reflect real activity in real time.
 """
 
 from __future__ import annotations
-from trusted_domains import is_trusted_domain
 import hashlib
 import json
 import math
@@ -36,18 +32,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-
-# --- WORKFLOW AUTOMATION ---
-# Automatically load API keys from a .env file so you don't have to manually enter them
 from dotenv import load_dotenv
+
 load_dotenv()
 
-# Project-local modules ---------------------------------------------------
+# Project-local modules
 from crypto_ledger import SecurityLedger
 from deepfake_engine import analyze_image
 from llm_expert import generate_mitigation_plan
 from phishing_engine import analyze_url
-
+from trusted_domains import is_trusted_domain
 
 # ------------------------------------------------------------------------
 # Crypto Ledger (shared, in-memory singleton + optional JSON persistence)
@@ -183,7 +177,7 @@ def password_strength_label(score: int, breached: bool, common: bool) -> str:
 
 
 # ------------------------------------------------------------------------
-# FastAPI app + CORS
+# FastAPI app + CORS Middleware
 # ------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -194,15 +188,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Sentinel X API", version="2.0", lifespan=lifespan)
 
+# Comprehensive CORS Configuration to allow Vercel and local development origins
+origins = [
+    "https://sentinel-x-navy.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:5500",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
-    allow_credentials=False, 
+    allow_origins=origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 # ------------------------------------------------------------------------
@@ -224,11 +229,8 @@ def _coerce_url_payload(payload: dict | None, form_url: str | None) -> str:
 
 
 def _normalize_phishing(raw: dict, url: str) -> dict:
-    """Map the hybrid engine output directly to the dashboard format."""
-    
     is_phishing = bool(raw.get("is_phishing", False))
     
-    # Handle both string percentages and float returns safely
     risk_raw = raw.get("phishing_risk_percent", 0.0)
     if isinstance(risk_raw, str):
         risk_score = float(risk_raw.rstrip("%"))
@@ -236,8 +238,6 @@ def _normalize_phishing(raw: dict, url: str) -> dict:
         risk_score = float(risk_raw)
         
     risk_score = max(0.0, min(100.0, risk_score))
-
-    # Pull the exact status and reasoning directly from the new phishing_engine.py
     status = str(raw.get("status", "SAFE")).upper()
     reason = str(raw.get("reason", "Domain analysis complete."))
 
@@ -250,9 +250,9 @@ def _normalize_phishing(raw: dict, url: str) -> dict:
         "reason": reason,
         "details": raw,
     }
+
+
 def _normalize_image(raw: dict, filename: str) -> dict:
-    """Map the deepfake engine output to the field names the dashboard expects."""
-    
     if raw.get("error"):
         return {
             "filename": filename,
@@ -261,7 +261,7 @@ def _normalize_image(raw: dict, filename: str) -> dict:
             "real_confidence": "0.00",
             "risk_score": 0.0,
             "status": "SYSTEM MESSAGE",
-            "reason": raw.get("reason", "An unknown cloud API error occurred."),
+            "reason": raw.get("reason", "An unknown error occurred."),
             "signs": ["Please check server connection.", "Awaiting AI activation."],
             "analyzed_via": "Error Handler",
             "details": raw,
@@ -271,57 +271,18 @@ def _normalize_image(raw: dict, filename: str) -> dict:
     fake_score = float(raw.get("fake_confidence", 0.0))
     real_score = float(raw.get("real_confidence", 100.0 - fake_score))
     
-    # Comprehensive forensic telemetry templates
-    if is_fake:
-        default_reason = "Generative AI synthetic patterns and structural gradient anomalies detected."
-        default_signs = [
-            "High-frequency latent diffusion noise patterns present",
-            "Error Level Analysis (ELA) reveals non-uniform compression matrices",
-            "Synthetic texture blending along structural edge boundaries",
-            "Specular highlight misalignment and simulated lighting falloff"
-        ]
-    else:
-        default_reason = "This image exhibits natural visual integrity with no generative diffusion or manipulation anomalies."
-        default_signs = [
-            "Uniform compression density confirmed via Error Level Analysis",
-            "Coherent geometric perspective and linework structural integrity",
-            "Consistent chromatic distribution across focal planes",
-            "Natural optical noise floor without latent model artifacts"
-        ]
-
-    reason = str(raw.get("reason") or default_reason)
-    raw_signs = raw.get("signs")
-    
-    if isinstance(raw_signs, list) and len(raw_signs) >= 3:
-        signs = [str(s) for s in raw_signs]
-    elif isinstance(raw_signs, list) and len(raw_signs) > 0:
-        signs = [str(s) for s in raw_signs]
-        for extra in default_signs:
-            if extra not in signs and len(signs) < 4:
-                signs.append(extra)
-    else:
-        signs = default_signs
-
-    # --- LIVE PRESENTATION SAFEGUARD ---
-    lowered_filename = filename.lower()
-    # Explicitly catch this specific realistic image filename to guarantee the demo works
-    if "fake" in lowered_filename or "generated" in lowered_filename or "3.05.51" in lowered_filename:
-        fake_score = 98.7
-        real_score = 1.3
-        is_fake = True
-        reason = "Generative AI synthetic patterns and structural gradient anomalies detected."
-        signs = [
-            "Demonstration override engaged",
-            "Mangled typography detected on frosting/props",
-            "Anatomical divergence (fused fingers) identified",
-            "Simulated photographic flash anomalies"
-        ]
+    reason = str(raw.get("reason") or "Analysis complete.")
+    signs = raw.get("signs", [])
+    if not isinstance(signs, list):
+        signs = [str(signs)]
 
     verdict = "fake" if is_fake else "real"
-    analyzed_via = raw.get("analyzed_via", "Deepfake Neural Forensic Engine")
+    analyzed_via = raw.get("analyzed_via", "Sentinel X True Sensor Fusion Ensemble")
 
     return {
         "filename": filename,
+        "classification": raw.get("classification", ""),
+        "description": raw.get("description", ""),
         "is_fake": is_fake,
         "fake_confidence": f"{fake_score:.2f}",
         "real_confidence": f"{real_score:.2f}",
@@ -334,28 +295,16 @@ def _normalize_image(raw: dict, filename: str) -> dict:
     }
 
 
-SCREENSHOT_KEYWORDS = [
-    "screenshot", "screen", "capture", "snip", "desktop", "display",
-]
-SCREENSHOT_FAKE_CAP = 29.99
-SCREENSHOT_REASON = "SAFE (UI Screenshot Verified)"
-
-def _looks_like_screenshot(filename: str) -> str | None:
-    if not filename:
-        return None
-    lowered = filename.lower()
-    for kw in SCREENSHOT_KEYWORDS:
-        if kw in lowered:
-            return kw
-    return None
-
 # =========================================================================
 # ROUTES (mounted under /api)
 # =========================================================================
 
 @app.get("/")
 def root():
-    return FileResponse("static/index.html")
+    if os.path.exists("static/index.html"):
+        return FileResponse("static/index.html")
+    return {"message": "Sentinel X API is operational."}
+
 
 @app.get("/api/health")
 def api_health():
@@ -401,7 +350,6 @@ async def api_scan_url(
             "details": {},
         }
 
-    # Safe execution of analyze_url — prevent 500 crashes
     try:
         raw = analyze_url(target)
     except Exception as exc:
@@ -425,43 +373,17 @@ async def api_scan_url(
             },
         )
     except Exception:
-        pass  # Prevent logging issues from failing the scan response
+        pass
 
     return result
+
 
 @app.post("/api/scan-image")
 async def api_scan_image(file: UploadFile = File(...)):
     original_filename = file.filename or "uploaded_image"
-
-    matched = _looks_like_screenshot(original_filename)
-    if matched is not None:
-        fake_score = SCREENSHOT_FAKE_CAP
-        real_score = 100.0 - fake_score
-        result = {
-            "filename": original_filename,
-            "is_fake": False,
-            "fake_confidence": f"{fake_score:.2f}",
-            "real_confidence": f"{real_score:.2f}",
-            "risk_score": fake_score,
-            "status": SCREENSHOT_REASON,
-            "details": {
-                "matched_keyword": matched,
-                "override": "screenshot_heuristic",
-            },
-        }
-        log_event(
-            threat_type="deepfake",
-            risk_score=result["risk_score"] / 100.0,
-            details={
-                "filename": result["filename"],
-                "is_fake": result["is_fake"],
-                "matched_keyword": matched,
-            },
-        )
-        return result
-
     suffix = os.path.splitext(original_filename)[1] or ".bin"
     tmp_path = None
+    
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(await file.read())
@@ -469,7 +391,7 @@ async def api_scan_image(file: UploadFile = File(...)):
 
         raw = analyze_image(tmp_path)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"deepfake engine error: {exc}")
+        raw = {"error": True, "reason": f"Analysis engine error: {str(exc)}"}
     finally:
         if tmp_path and os.path.exists(tmp_path):
             try:
@@ -478,14 +400,19 @@ async def api_scan_image(file: UploadFile = File(...)):
                 pass
 
     result = _normalize_image(raw, original_filename)
-    log_event(
-        threat_type="deepfake",
-        risk_score=result["risk_score"] / 100.0,
-        details={
-            "filename": result["filename"],
-            "is_fake": result["is_fake"],
-        },
-    )
+    
+    try:
+        log_event(
+            threat_type="deepfake",
+            risk_score=result["risk_score"] / 100.0,
+            details={
+                "filename": result["filename"],
+                "is_fake": result["is_fake"],
+            },
+        )
+    except Exception:
+        pass
+        
     return result
 
 
@@ -536,18 +463,22 @@ async def api_check_password(payload: dict):
         "suggestion": " ".join(suggestions) or "Looks good — keep using a unique password manager.",
     }
 
-    log_event(
-        threat_type="weak_password",
-        risk_score=risk_score / 100.0,
-        details={
-            "length": len(password),
-            "is_breached": is_breached,
-            "breach_count": breach_count,
-            "strength": complexity,
-            "entropy": entropy,
-            "password_sha256": hashlib.sha256(password.encode("utf-8")).hexdigest(),
-        },
-    )
+    try:
+        log_event(
+            threat_type="weak_password",
+            risk_score=risk_score / 100.0,
+            details={
+                "length": len(password),
+                "is_breached": is_breached,
+                "breach_count": breach_count,
+                "strength": complexity,
+                "entropy": entropy,
+                "password_sha256": hashlib.sha256(password.encode("utf-8")).hexdigest(),
+            },
+        )
+    except Exception:
+        pass
+
     return result
 
 
@@ -640,7 +571,6 @@ async def security_copilot_chat(request: Request):
         user_message = data.get("message", "").strip()
         user_logs = data.get("logs", [])
 
-        # 1. Accurately categorize all three log states
         threat_count = 0
         suspicious_count = 0
         safe_count = 0
@@ -678,7 +608,6 @@ async def security_copilot_chat(request: Request):
         if user_message.lower() in {"hi", "hello", "hey", "help"}:
             return {"reply": "Operator online. How can I assist with your security analysis?"}
 
-        # 2. Dual-Mode System Prompt: Report vs. Conversation
         system_prompt = f"""You are the Sentinel X Security Copilot, an elite cybersecurity AI. 
 Your tone must be helpful, direct, and clear. Avoid dense corporate jargon and long run-on sentences.
 
@@ -707,24 +636,25 @@ A) If the user asks for a report, to "analyze logs", "summarize", or asks about 
 3. **Future Hardening:** [One short sentence on how to prevent this next time.]
 
 B) If the user asks a general security question, asks for advice (e.g., "how to avoid risks", "what is a deepfake?"), or makes conversation, DO NOT use the Posture Summary layout. Instead, answer them directly and naturally. 
-CRITICAL UI RULE: NEVER use Markdown tables (e.g., | Column | Column |). The chat UI cannot render them. Always use standard bullet points and short paragraphs to provide expert, practical cybersecurity advice."""
+CRITICAL UI RULE: NEVER use Markdown tables. Always use standard bullet points and short paragraphs."""
 
-        GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
+        GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+        if not GROQ_API_KEY:
+            return {"reply": "Security Copilot is currently offline (GROQ_API_KEY missing)."}
 
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json"
         }
 
-        # CHANGE THIS BLOCK in main.py
         payload = {
-            "model": "openai/gpt-oss-120b",
+            "model": "llama-3.3-70b-versatile",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"User Request: {user_message}\n\nSystem Logs:\n{log_context}"}
             ],
             "temperature": 0.2,
-            "max_tokens": 2048  # <-- Increased to allow complete, detailed responses
+            "max_tokens": 2048
         }
 
         response = requests.post(
@@ -740,6 +670,7 @@ CRITICAL UI RULE: NEVER use Markdown tables (e.g., | Column | Column |). The cha
 
     except Exception as e:
         return {"reply": f"Internal System Error: {str(e)}"}
+
 
 @app.get("/api/score")
 def api_score():
@@ -770,7 +701,5 @@ def api_ledger():
 # ------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
-    import os
-    
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
