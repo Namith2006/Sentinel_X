@@ -18,7 +18,7 @@ class TrueForensicEnsemble:
         self.signs = []
         
     def analyze_container(self, img):
-        """Step 1: Determine if the image is a raw file or a compressed screenshot/messaging app file."""
+        """Step 1: Container Labeling (No Suppression Triggers)"""
         exif = img.getexif()
         has_metadata = bool(exif and (0x010f in exif or 0x0110 in exif))
         
@@ -36,20 +36,20 @@ class TrueForensicEnsemble:
             self.signs.append("Container Analysis: Image lacks native metadata or exhibits uniform recompression (Screenshot/WhatsApp).")
 
     def calculate_math_threat(self, cv_img):
-        """Step 2: Calibrated Spatial & Frequency Math for Messaging Apps & Selfies."""
+        """Step 2: Sensitive Spatial Math (Fixed 0.0% Blind Spot)"""
         gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
         
-        # 1. Laplacian Variance - Drastically lowered to forgive smartphone beauty filters
+        # 1. Laplacian Variance - Widened gradient to stop 0.0% clamping
         lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-        smoothness_threat = max(0.0, min(100.0, (150.0 - lap_var) / 1.5))
+        smoothness_threat = max(0.0, min(100.0, (600.0 - lap_var) / 6.0))
         
-        # 2. Pixel Entropy - Lowered to forgive WhatsApp JPEG artifacting
+        # 2. Pixel Entropy - Softened multiplier
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
         hist = hist.ravel() / (hist.sum() + 1e-7)
         entropy = float(-np.sum(hist * np.log2(hist + 1e-7)))
-        entropy_threat = max(0.0, min(100.0, (6.8 - entropy) * 100.0))
+        entropy_threat = max(0.0, min(100.0, (7.8 - entropy) * 40.0))
         
-        # 3. Fast Fourier Transform (High-Frequency Energy Ratio)
+        # 3. FFT High-Frequency Energy Ratio - Increased baseline sensitivity
         roi = cv2.resize(gray, (256, 256))
         f = np.fft.fft2(roi)
         fshift = np.fft.fftshift(f)
@@ -60,14 +60,14 @@ class TrueForensicEnsemble:
         high_freq_energy = total_energy - low_freq_energy
         
         hf_ratio = (high_freq_energy / total_energy) * 100.0
-        fft_threat = max(0.0, min(100.0, (4.0 - hf_ratio) * 25.0))
+        fft_threat = max(0.0, min(100.0, (12.0 - hf_ratio) * 8.0))
         
         math_threat = float((smoothness_threat + entropy_threat + fft_threat) / 3.0)
         self.features['math_threat'] = math_threat
-        self.signs.append(f"Mathematical Analysis: Spatial/FFT metrics yielded {round(math_threat, 1)}% synthetic probability.")
+        self.signs.append(f"Mathematical Analysis: Spatial/FFT metrics returned {round(math_threat, 1)}% synthetic baseline.")
 
     def query_cnn_threat(self, image_bytes):
-        """Step 3: Query dedicated Deepfake Convolutional Neural Network."""
+        """Step 3: Query dedicated Deepfake CNN"""
         if not HF_API_TOKEN:
             self.signs.append("CNN Analysis: HF_API_TOKEN missing. Defaulting strictly to Spatial Math.")
             return self.features.get('math_threat', 0.0)
@@ -92,37 +92,26 @@ class TrueForensicEnsemble:
         return self.features.get('math_threat', 0.0)
 
     def fuse_and_classify(self, cnn_threat):
-        """Step 4: Tiered Confidence Sensor Fusion."""
+        """Step 4: AI-First Additive Fusion"""
         math_threat = float(self.features['math_threat'])
         is_screenshot = bool(self.features['is_screenshot'])
 
-        # --- TIER 1: Extreme AI Confidence (Hard Override) ---
-        if cnn_threat > 95.0:
-            self.signs.append(f"Tier 1 Override: CNN is extremely confident ({round(cnn_threat, 1)}%). Bypassing spatial math guardrails.")
-            fused_score = max(80.0, cnn_threat)
-            
-        # --- TIER 2 & 3: Gradient Sanity Check ---
+        # AI is the indisputable baseline
+        base_score = cnn_threat
+        
+        # Math acts as a confidence modifier (-15% to +15% impact on the AI's score)
+        math_influence = (math_threat - 50.0) * 0.3 
+
+        if is_screenshot and math_influence < 0:
+            # If it's a screenshot, the math will naturally look "real" due to compression.
+            # We halve the mathematical penalty so it doesn't drag down a correct CNN detection.
+            math_influence *= 0.5
+            self.signs.append(f"AI-First Fusion: Screenshot detected. Math penalty softened to {round(math_influence, 1)}%.")
         else:
-            if is_screenshot:
-                if math_threat <= 20.0:
-                    self.signs.append(f"Tier 3 Suppression: Math threat is negligible ({round(math_threat, 1)}%). Throttling CNN to prevent compression hallucination.")
-                    cnn_weight = 0.4
-                    math_weight = 0.6
-                elif math_threat <= 40.0:
-                    self.signs.append(f"Tier 2 Balancing: Math threat is low-moderate ({round(math_threat, 1)}%). Applying standard weighting.")
-                    cnn_weight = 0.7
-                    math_weight = 0.3
-                else:
-                    self.signs.append(f"Tier 2 Threat Multiplication: Math confirms synthetic patterns. Boosting AI confidence.")
-                    cnn_weight = 0.85
-                    math_weight = 0.15
-            else:
-                # Native Image: Default to high CNN trust
-                cnn_weight = 0.85
-                math_weight = 0.15
+            modifier_type = "bonus" if math_influence >= 0 else "penalty"
+            self.signs.append(f"AI-First Fusion: Math applied a {round(math_influence, 1)}% {modifier_type} to CNN base score.")
 
-            fused_score = (cnn_threat * cnn_weight) + (math_threat * math_weight)
-
+        fused_score = max(0.0, min(100.0, base_score + math_influence))
         is_fake = bool(fused_score >= 50.0)
 
         # 4-Class Matrix
@@ -139,7 +128,7 @@ class TrueForensicEnsemble:
             classification = "1_Real_Native"
             desc = "Authentic camera photograph"
             
-        reason = f"[{classification.upper()}] Forensic Ensemble Analysis: Convolutional network assessed {round(cnn_threat, 1)}% synthetic threat, corroborated by {round(math_threat, 1)}% spatial/FFT threat. Final fused probability: {round(fused_score, 1)}%."
+        reason = f"[{classification.upper()}] Additive Fusion: CNN Base ({round(base_score, 1)}%) modified by Spatial Math ({round(math_influence, 1)}%). Final probability: {round(fused_score, 1)}%."
             
         return classification, desc, fused_score, reason
 
@@ -163,7 +152,6 @@ def analyze_image(image_path: str) -> dict:
             enhanced_bgr = cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
             enhanced_rgb = cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB)
             
-            # Downsample enhanced image to avoid memory exhaustion
             enhanced_pil = Image.fromarray(enhanced_rgb)
             enhanced_pil.thumbnail((1024, 1024))
             buf = io.BytesIO()
@@ -192,7 +180,7 @@ def analyze_image(image_path: str) -> dict:
             "reason": str(reason),
             "signs": ensemble.signs,
             "detailed_analysis": ensemble.features,
-            "analyzed_via": "Sentinel X Context-Aware Fusion"
+            "analyzed_via": "Sentinel X AI-First Additive Fusion"
         }
 
     except Exception as e:
