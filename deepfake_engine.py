@@ -108,10 +108,6 @@ class EnhancedFeatureExtractor:
             self.features['has_ai_watermark'] = False
             self.features['has_ui_text'] = False
 
-
-# ==========================================
-# 🧠 DECISION CLASSIFIER LOGIC
-# ==========================================
 # ==========================================
 # 🧠 DECISION CLASSIFIER LOGIC
 # ==========================================
@@ -123,9 +119,9 @@ class ImageClassifier:
     def classify(self):
         feat = self.extractor.features
         raw_vision_score = float(self.vision_data.get("fake_confidence", 0.0))
-        is_vision_ai_flag = self.vision_data.get("is_ai")
+        is_vision_ai_flag = self.vision_data.get("is_ai", False)
         
-        # 1. Container Check (Screenshot / Screen Re-compression)
+        # 1. Container Check (WhatsApp strips EXIF and compresses)
         is_screenshot = (
             feat.get('is_common_screen_res', False) or 
             feat.get('has_ui_structure', False) or 
@@ -135,32 +131,28 @@ class ImageClassifier:
         )
                          
         # 2. Content Check: Cross-Validation Fusion
-        # Fusing the LLM's visual assessment with the OpenCV mathematical algorithms
         math_ai_score = feat.get('combined_ai_score', 0.0) * 100
-        
-        # Authentic screenshots retain optical noise (low math score). 
-        # AI screenshots have low-entropy pixel structures (high math score).
         fused_ai_score = (raw_vision_score * 0.6) + (math_ai_score * 0.4)
         
+        # RAISED TRIPWIRE: Requires a fused score >= 45.0 to declare synthetic media
         is_ai = (
             raw_vision_score >= 45.0 or 
             (is_vision_ai_flag is True) or
-            fused_ai_score >= 32.0 or 
+            fused_ai_score >= 45.0 or 
             feat.get('has_ai_watermark', False)
         )
                  
         # 3. 4-Class Classification Multipliers
         if is_screenshot and is_ai:
             classification = "4_AI_Screenshot"
-            # Boost based on the fused algorithmic score to guarantee critical threat tier
-            confidence = max(88.5, fused_ai_score * 2.6)
+            confidence = max(88.5, fused_ai_score * 1.8)
             desc = "Screenshot / Compressed AI-generated image"
             
         elif is_screenshot and not is_ai:
             classification = "2_Real_Screenshot"
-            # Strictly cap real screenshots so they never trigger a false positive
-            confidence = min(25.0, fused_ai_score)
-            desc = "Screenshot of an authentic photograph"
+            # Authentic messaging app photos are strictly capped to stay safe
+            confidence = min(20.0, fused_ai_score)
+            desc = "Screenshot / Messaging App authentic photograph"
             
         elif is_ai and not is_screenshot:
             classification = "3_AI_Native"
@@ -182,11 +174,8 @@ def analyze_image(image_path: str) -> dict:
         return {"error": True, "reason": "GROQ_API_KEY is missing from environment."}
 
     try:
-        # Load and resize for bandwidth and memory optimization
         with Image.open(image_path) as orig_img:
             img = orig_img.convert('RGB')
-            
-            # Step 1: Create a downsampled image for Groq (prevents HTTP 413 Payload Too Large)
             groq_img = img.copy()
             groq_img.thumbnail((1024, 1024))
             
@@ -197,7 +186,6 @@ def analyze_image(image_path: str) -> dict:
 
         cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
-        # Step 2: Run 6-Branch Feature Extraction locally
         extractor = EnhancedFeatureExtractor()
         extractor.extract_metadata(img)
         extractor.extract_resolution(img.width, img.height)
@@ -209,7 +197,6 @@ def analyze_image(image_path: str) -> dict:
         del cv_img
         gc.collect()
 
-        # Step 3: Query Active Vision Model
         system_prompt = """You are an elite digital forensics AI. 
 Evaluate this image for synthetic AI generation markers:
 1. Cardboard / Sign Text: Check if handwriting/typography looks digitally stamped, warped, or synthetically rendered.
@@ -224,7 +211,6 @@ Respond STRICTLY in JSON:
             "Content-Type": "application/json"
         }
         
-        # Primary model updated to Qwen3.8-27b (since Llama 90B was decommissioned)
         models_to_try = ["qwen/qwen3.8-27b", "llama-3.2-11b-vision-preview"]
         vision_data = None
         last_error = ""
@@ -257,9 +243,10 @@ Respond STRICTLY in JSON:
             except Exception as e:
                 last_error = str(e)
 
-        # If Cloud API fails, rely on local visual math with a professional output reason
         if not vision_data:
-            math_score = 85.0 if extractor.features.get('is_likely_ai', False) else 40.0
+            # DROPPED BASELINE: Lowered from 40.0 to 15.0 to prevent false fusion triggers
+            math_score = 85.0 if extractor.features.get('is_likely_ai', False) else 15.0
+            
             if math_score >= 50.0:
                 clean_reason = "Analyzed via Local Forensic Math. Generative anomalies detected matching synthetic media."
             else:
@@ -267,14 +254,13 @@ Respond STRICTLY in JSON:
                 
             vision_data = {
                 "fake_confidence": math_score,
+                "is_ai": math_score >= 50.0,
                 "reason": clean_reason
             }
 
-        # Step 4: Classify via 4-Class Decision Matrix
         classifier = ImageClassifier(extractor, vision_data)
         classification, desc, final_fake_prob = classifier.classify()
 
-        # Step 5: Format response for frontend dashboard
         is_final_fake = final_fake_prob >= 50.0
         final_reason = f"[{classification.upper()}] {desc}. {vision_data.get('reason', '')}"
 
