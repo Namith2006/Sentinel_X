@@ -621,7 +621,8 @@
             authenticatorSelection: {
                 authenticatorAttachment: "platform",
                 userVerification: "required",
-                residentKey: "preferred"
+                residentKey: "required",
+                requireResidentKey: true
             },
             timeout: 60000,
             attestation: "none"
@@ -1200,6 +1201,9 @@
         dz.addEventListener("click", (e) => { if (e.target.tagName !== "INPUT") input.click(); });
         ["dragenter","dragover"].forEach(ev => dz.addEventListener(ev, e => {
             e.preventDefault(); e.stopPropagation(); dz.classList.add("drag-over");
+        }));
+        ["dragleave","drop"].forEach(ev => dz.addEventListener(ev, e => {
+            e.preventDefault(); e.stopPropagation(); dz.classList.remove("drag-over");e.preventDefault(); e.stopPropagation(); dz.classList.add("drag-over");
         }));
         ["dragleave","drop"].forEach(ev => dz.addEventListener(ev, e => {
             e.preventDefault(); e.stopPropagation(); dz.classList.remove("drag-over");
