@@ -36,18 +36,18 @@ class TrueForensicEnsemble:
             self.signs.append("Container Analysis: Image lacks native metadata or exhibits uniform recompression (Screenshot/WhatsApp).")
 
     def calculate_math_threat(self, cv_img):
-        """Step 2: Calibrated Spatial & Frequency Math (Laplacian, Entropy, FFT Ratio)."""
+        """Step 2: Calibrated Spatial & Frequency Math for Messaging Apps & Selfies."""
         gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
         
-        # 1. Laplacian Variance (Texture/Smoothness) - Calibrated for mobile
+        # 1. Laplacian Variance - Drastically lowered to forgive smartphone beauty filters
         lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-        smoothness_threat = max(0.0, min(100.0, (300.0 - lap_var) / 3.0))
+        smoothness_threat = max(0.0, min(100.0, (150.0 - lap_var) / 1.5))
         
-        # 2. Pixel Entropy (Information Density) - Calibrated for compression
+        # 2. Pixel Entropy - Lowered to forgive WhatsApp JPEG artifacting
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
         hist = hist.ravel() / (hist.sum() + 1e-7)
         entropy = float(-np.sum(hist * np.log2(hist + 1e-7)))
-        entropy_threat = max(0.0, min(100.0, (7.0 - entropy) * 100.0))
+        entropy_threat = max(0.0, min(100.0, (6.8 - entropy) * 100.0))
         
         # 3. Fast Fourier Transform (High-Frequency Energy Ratio)
         roi = cv2.resize(gray, (256, 256))
@@ -55,17 +55,13 @@ class TrueForensicEnsemble:
         fshift = np.fft.fftshift(f)
         mag = np.abs(fshift)
         
-        # Calculate total energy vs low-frequency energy (center 30x30 pixels)
         total_energy = float(np.sum(mag)) + 1e-7
         low_freq_energy = float(np.sum(mag[128-15:128+15, 128-15:128+15]))
         high_freq_energy = total_energy - low_freq_energy
         
-        # Natural images have a healthy distribution of high-frequency noise.
-        # Deepfakes are unnaturally smooth in the frequency domain.
         hf_ratio = (high_freq_energy / total_energy) * 100.0
-        fft_threat = max(0.0, min(100.0, (8.0 - hf_ratio) * 12.5))
+        fft_threat = max(0.0, min(100.0, (4.0 - hf_ratio) * 25.0))
         
-        # Average the three spatial/frequency components
         math_threat = float((smoothness_threat + entropy_threat + fft_threat) / 3.0)
         self.features['math_threat'] = math_threat
         self.signs.append(f"Mathematical Analysis: Spatial/FFT metrics yielded {round(math_threat, 1)}% synthetic probability.")
@@ -96,31 +92,40 @@ class TrueForensicEnsemble:
         return self.features.get('math_threat', 0.0)
 
     def fuse_and_classify(self, cnn_threat):
-        """Step 4: True Uncapped Sensor Fusion with Sanity Check."""
+        """Step 4: Tiered Confidence Sensor Fusion."""
         math_threat = float(self.features['math_threat'])
         is_screenshot = bool(self.features['is_screenshot'])
 
-        # --- SANITY CHECK ---
-        # If it's a screenshot and the math strongly suggests it's REAL (< 30%),
-        # the CNN is likely hallucinating due to WhatsApp compression artifacts.
-        # We throttle the CNN to prevent false positives.
-        if is_screenshot and math_threat < 30.0:
-            self.signs.append(f"Sanity Check: Math threat is very low ({round(math_threat,1)}%). Throttling CNN to prevent compression-based hallucination.")
-            cnn_weight = 0.4
-            math_weight = 0.6
-        elif is_screenshot:
-            # Standard screenshot: Rely more on semantic CNN
-            cnn_weight = 0.8
-            math_weight = 0.2
+        # --- TIER 1: Extreme AI Confidence (Hard Override) ---
+        if cnn_threat > 95.0:
+            self.signs.append(f"Tier 1 Override: CNN is extremely confident ({round(cnn_threat, 1)}%). Bypassing spatial math guardrails.")
+            fused_score = max(80.0, cnn_threat)
+            
+        # --- TIER 2 & 3: Gradient Sanity Check ---
         else:
-            # Native image: Boosted CNN weight
-            cnn_weight = 0.85
-            math_weight = 0.15
+            if is_screenshot:
+                if math_threat <= 20.0:
+                    self.signs.append(f"Tier 3 Suppression: Math threat is negligible ({round(math_threat, 1)}%). Throttling CNN to prevent compression hallucination.")
+                    cnn_weight = 0.4
+                    math_weight = 0.6
+                elif math_threat <= 40.0:
+                    self.signs.append(f"Tier 2 Balancing: Math threat is low-moderate ({round(math_threat, 1)}%). Applying standard weighting.")
+                    cnn_weight = 0.7
+                    math_weight = 0.3
+                else:
+                    self.signs.append(f"Tier 2 Threat Multiplication: Math confirms synthetic patterns. Boosting AI confidence.")
+                    cnn_weight = 0.85
+                    math_weight = 0.15
+            else:
+                # Native Image: Default to high CNN trust
+                cnn_weight = 0.85
+                math_weight = 0.15
 
-        fused_score = (cnn_threat * cnn_weight) + (math_threat * math_weight)
+            fused_score = (cnn_threat * cnn_weight) + (math_threat * math_weight)
+
         is_fake = bool(fused_score >= 50.0)
 
-        # 4-Class Matrix (Uncapped)
+        # 4-Class Matrix
         if is_screenshot and is_fake:
             classification = "4_AI_Screenshot"
             desc = "Screenshot / Compressed AI-generated image"
@@ -151,7 +156,6 @@ def analyze_image(image_path: str) -> dict:
             lab = cv2.cvtColor(cv_img, cv2.COLOR_BGR2LAB)
             l_channel, a_channel, b_channel = cv2.split(lab)
             
-            # Apply Contrast Limited Adaptive Histogram Equalization
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
             cl = clahe.apply(l_channel)
             
@@ -166,7 +170,6 @@ def analyze_image(image_path: str) -> dict:
             enhanced_pil.save(buf, format="JPEG", quality=85)
             cnn_image_bytes = buf.getvalue()
 
-        # Initialize Ensemble
         ensemble = TrueForensicEnsemble(image_path)
         
         ensemble.analyze_container(img)
@@ -175,7 +178,6 @@ def analyze_image(image_path: str) -> dict:
         del cv_img
         gc.collect()
 
-        # Query CNN using the CLAHE-enhanced image bytes
         cnn_threat = ensemble.query_cnn_threat(cnn_image_bytes)
         
         classification, desc, fused_score, reason = ensemble.fuse_and_classify(cnn_threat)
@@ -190,7 +192,7 @@ def analyze_image(image_path: str) -> dict:
             "reason": str(reason),
             "signs": ensemble.signs,
             "detailed_analysis": ensemble.features,
-            "analyzed_via": "Sentinel X Calibrated Sensor Fusion"
+            "analyzed_via": "Sentinel X Context-Aware Fusion"
         }
 
     except Exception as e:
