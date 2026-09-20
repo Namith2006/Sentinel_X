@@ -5,180 +5,243 @@ import base64
 import requests
 import cv2
 import numpy as np
+import gc
 from PIL import Image, ImageChops, ImageEnhance
 import pytesseract
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "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")
-HF_API_TOKEN = os.getenv("HF_API_TOKEN") 
-
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-HF_API_URL = "https://router.huggingface.co/hf-inference/models/prithivMLmods/Deep-Fake-Detector-v2-Model"
 
-def extract_screenshot_heuristics(image_bytes):
-    """
-    Executes Steps 1-5 of the Forensic Framework.
-    Returns a probability score (0.0 to 1.0) and a list of detected forensic flags.
-    """
-    signs = []
-    screenshot_score = 0.0
+# ==========================================
+# 🎯 CLASS DEFINITIONS (4-CLASS PROBLEM)
+# ==========================================
+CLASS_DEFINITIONS = {
+    "1_Real_Native": "Native camera photo (DSLR, phone camera)",
+    "2_Real_Screenshot": "Screenshot of real photo in browser/app",
+    "3_AI_Native": "Direct AI-generated image (Midjourney, DALL-E)",
+    "4_AI_Screenshot": "Screenshot of AI-generated image"
+}
 
-    try:
-        img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-        width, height = img.size
-        
-        # 1. Metadata & EXIF Analysis
+# ==========================================
+# 📊 ENHANCED FEATURE EXTRACTION
+# ==========================================
+class EnhancedFeatureExtractor:
+    """
+    Improved 6-branch feature extraction optimized for 4-class classification.
+    Memory-efficient for Render deployment.
+    """
+    def __init__(self):
+        self.features = {}
+        self.debug_signs = []
+    
+    def extract_metadata(self, img):
         exif = img.getexif()
-        if not exif:
-            screenshot_score += 0.25
-            signs.append("Metadata: Missing native EXIF camera sensors (Screenshot anomaly).")
-        
-        # 2. Resolution & Aspect Ratio Heuristics
-        common_res = {
-            (1920, 1080), (1080, 1920), (1366, 768), (768, 1366), 
-            (2400, 1080), (1080, 2400), (2532, 1170), (1170, 2532),
-            (2778, 1284), (1284, 2778), (2796, 1290), (1290, 2796)
-        }
-        if (width, height) in common_res:
-            screenshot_score += 0.25
-            signs.append(f"Resolution: Matches exact display viewport ({width}x{height}).")
-        
-        # 3. Edge and Border Detection (OpenCV)
-        try:
-            cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-            gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-            edges = cv2.Canny(gray, 50, 150, apertureSize=3)
-            # Scan for long, perfectly straight lines characteristic of UI boundaries
-            lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=width*0.7, maxLineGap=10)
-            if lines is not None and len(lines) > 0:
-                screenshot_score += 0.20
-                signs.append("Edge Detection: Artificial UI borders or framing detected.")
-        except Exception:
-            pass
+        if not exif or (0x010f not in exif and 0x0110 not in exif):
+            self.features['has_camera_metadata'] = False
+            self.debug_signs.append("Metadata Branch: Missing native camera EXIF tags (Screenshot indicator).")
+        else:
+            self.features['has_camera_metadata'] = True
 
-        # 4. Error Level Analysis (ELA) Compression Patterns
+    def extract_resolution(self, width, height):
+        common_res = {(1920, 1080), (1080, 1920), (1366, 768), (768, 1366), 
+                      (2400, 1080), (1080, 2400), (2532, 1170), (1170, 2532),
+                      (2778, 1284), (1284, 2778), (2796, 1290), (1290, 2796)}
+        self.features['is_common_screen_res'] = (width, height) in common_res
+        if self.features['is_common_screen_res']:
+            self.debug_signs.append(f"Resolution Branch: Dimensions match display viewport ({width}x{height}).")
+
+    def extract_ui_edges(self, cv_img):
+        gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+        lines = cv2.HoughLinesP(edges, 1, np.pi/180, 100, minLineLength=cv_img.shape[1]*0.6, maxLineGap=10)
+        self.features['has_ui_structure'] = lines is not None and len(lines) > 0
+        if self.features['has_ui_structure']:
+            self.debug_signs.append("Edge/UI Branch: Detected straight lines indicative of UI borders/letterboxing.")
+
+    def extract_compression(self, img):
         try:
             temp_io = io.BytesIO()
             img.save(temp_io, 'JPEG', quality=90)
             temp_io.seek(0)
-            resaved_img = Image.open(temp_io)
-            
-            ela_img = ImageChops.difference(img, resaved_img)
+            resaved = Image.open(temp_io)
+            ela_img = ImageChops.difference(img, resaved)
             extrema = ela_img.getextrema()
-            max_diff = max([ex[1] for ex in extrema])
+            max_diff = max([ex[1] for ex in extrema]) if extrema else 1
             scale = 255.0 / (max_diff if max_diff != 0 else 1)
             ela_img = ImageEnhance.Brightness(ela_img).enhance(scale)
-            
-            ela_mean = np.mean(np.array(ela_img))
-            if ela_mean > 12.0:
-                screenshot_score += 0.20
-                signs.append(f"ELA: Uniform recompression detected (Delta: {round(ela_mean, 1)}).")
+            ela_score = np.mean(np.array(ela_img))
+            self.features['ela_compression'] = ela_score
+            if ela_score > 8.0:
+                self.debug_signs.append(f"Compression Branch: ELA uniform recompression detected ({round(ela_score, 1)}).")
         except Exception:
-            pass
+            self.features['ela_compression'] = 0.0
 
-        # 5. OCR for UI Text
+    def extract_ai_artifacts(self, cv_img):
+        # AI artifacts persist through screenshots via smoothness, low entropy, and frequency[cite: 11]
+        gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+        
+        # 1. Smoothness (Laplacian variance)
+        lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+        smoothness_score = 1.0 if lap_var < 500 else (0.5 if lap_var < 1000 else 0.0)
+
+        # 2. Entropy (Uniformity)
+        hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
+        hist = hist.ravel() / hist.sum()
+        entropy = -np.sum(hist * np.log2(hist + 1e-7))
+        entropy_score = 1.0 if entropy < 7.2 else 0.0
+
+        # 3. Frequency Domain (FFT reduced for memory optimization)
+        roi = cv2.resize(gray, (256, 256))
+        f = np.fft.fft2(roi)
+        fshift = np.fft.fftshift(f)
+        mag = 20 * np.log(np.abs(fshift) + 1)
+        freq_score = 1.0 if np.mean(mag) < 140 else 0.0
+
+        # Weighted combination from architectural spec
+        ai_score = (smoothness_score * 0.4 + freq_score * 0.35 + entropy_score * 0.25)
+        self.features['combined_ai_score'] = ai_score
+        self.features['is_likely_ai'] = ai_score > 0.55
+        
+        if self.features['is_likely_ai']:
+            self.debug_signs.append(f"Visual Branch: Generative artifacts found via frequency/smoothness math (Score: {round(ai_score,2)}).")
+
+    def extract_text_features(self, img):
         try:
             text = pytesseract.image_to_string(img).lower()
-            suspicious_terms = ['midjourney', 'stable diffusion', 'dall-e', 'lte', 'volte', 'screenshot', 'pm', 'am']
-            if any(term in text for term in suspicious_terms):
-                screenshot_score += 0.30
-                signs.append("OCR: System UI elements or AI watermarks identified in canvas.")
+            self.features['has_ai_watermark'] = any(t in text for t in ['midjourney', 'stable diffusion', 'dall-e'])
+            self.features['has_ui_text'] = any(t in text for t in ['am', 'pm', 'lte', 'volte', 'screenshot'])
         except Exception:
-            pass # Fails silently if Tesseract binary is not installed on Render host
-
-    except Exception:
-        pass
-
-    return min(screenshot_score, 1.0), signs
+            self.features['has_ai_watermark'] = False
+            self.features['has_ui_text'] = False
 
 
+# ==========================================
+# 🧠 DECISION CLASSIFIER LOGIC
+# ==========================================
+class ImageClassifier:
+    def __init__(self, extractor, vision_data):
+        self.extractor = extractor
+        self.vision_data = vision_data
+        
+    def classify(self):
+        feat = self.extractor.features
+        groq_fake_prob = float(self.vision_data.get("fake_confidence", 30.0))
+        
+        # Combine screenshot indicators 
+        is_screenshot = (feat.get('is_common_screen_res', False) or 
+                         feat.get('has_ui_structure', False) or 
+                         feat.get('has_ui_text', False) or 
+                         not feat.get('has_camera_metadata', True) or
+                         feat.get('ela_compression', 0.0) > 8.0)
+                         
+        # Combine AI indicators
+        is_ai = (feat.get('is_likely_ai', False) or 
+                 feat.get('has_ai_watermark', False) or 
+                 groq_fake_prob >= 50.0)
+                 
+        # 4-Class Decision Tree
+        if is_screenshot and is_ai:
+            classification = "4_AI_Screenshot"
+            confidence = max(85.0, groq_fake_prob * 2.8) # Force critical threat tier
+            desc = "Screenshot of an AI-generated image"
+        elif is_screenshot and not is_ai:
+            classification = "2_Real_Screenshot"
+            confidence = min(34.0, groq_fake_prob) # Cap safely below alert tier
+            desc = "Screenshot of an authentic photograph"
+        elif is_ai and not is_screenshot:
+            classification = "3_AI_Native"
+            confidence = max(50.0, groq_fake_prob)
+            desc = "Native AI-generated output"
+        else:
+            classification = "1_Real_Native"
+            confidence = min(25.0, groq_fake_prob)
+            desc = "Native authentic photograph"
+            
+        return classification, desc, min(99.9, confidence)
+
+
+# ==========================================
+# 🚀 MAIN ANALYSIS ENDPOINT
+# ==========================================
 def analyze_image(image_path: str) -> dict:
     if not GROQ_API_KEY:
         return {"error": True, "reason": "ERROR: GROQ_API_KEY is missing."}
 
     try:
+        # Load and encode image
         with open(image_path, "rb") as f:
             image_bytes = f.read()
             encoded_string = base64.b64encode(image_bytes).decode('utf-8')
+
+        img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+        
+        # Memory Optimization for Render[cite: 11]
+        if max(img.size) > 2048:
+            img.thumbnail((2048, 2048))
             
+        cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+        # 1. Run Enhanced Feature Extraction
+        extractor = EnhancedFeatureExtractor()
+        extractor.extract_metadata(img)
+        extractor.extract_resolution(img.width, img.height)
+        extractor.extract_ui_edges(cv_img)
+        extractor.extract_compression(img)
+        extractor.extract_ai_artifacts(cv_img)
+        extractor.extract_text_features(img)
+
+        # Cleanup memory
+        del cv_img
+        gc.collect()
+
+        # 2. Run Vision LLM
         ext = image_path.split('.')[-1].lower()
         mime_type = f"image/{ext}" if ext in ['jpg', 'jpeg', 'png', 'webp'] else "image/jpeg"
-
-        # Execute Steps 1-5
-        scr_score, heuristic_signs = extract_screenshot_heuristics(image_bytes)
-        is_screenshot = scr_score >= 0.45
-
-        system_prompt = """You are an elite adversarial digital forensics AI. 
-Evaluate this image for generative AI anomalies (melted fingers, gibberish text, cinematic studio lighting in impoverished settings). 
-Respond strictly in JSON: {"is_fake": boolean, "fake_confidence": float, "real_confidence": float, "reason": "string", "signs": ["string"]}"""
+        
+        system_prompt = """Evaluate this image for generative AI anomalies (melted anatomy, gibberish text, cinematic studio lighting in impoverished settings). 
+        Respond STRICTLY in JSON: {"fake_confidence": float, "reason": "string"}"""
 
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         payload = {
             "model": "llama-3.2-90b-vision-preview",
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": [{"type": "text", "text": "Execute forensic audit. Return ONLY JSON."}, {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded_string}"}}]}
+                {"role": "user", "content": [{"type": "text", "text": "Execute forensic audit. Output JSON only."}, {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded_string}"}}]}
             ],
             "temperature": 0.0,
             "response_format": {"type": "json_object"}
         }
-
-        # 6. Hybrid Classifier Fusion Engine
-        def hybrid_fusion(data_dict):
-            raw_ai_prob = float(data_dict.get("fake_confidence", data_dict.get("deepfake_probability", data_dict.get("fake", 0.0))))
-            
-            if is_screenshot and 10.0 <= raw_ai_prob < 50.0:
-                # Fuse the underlying AI detection score with the OpenCV/EXIF heuristic multiplier
-                new_prob = min(98.5, raw_ai_prob * (2.5 + scr_score)) 
-                data_dict["fake_confidence"] = new_prob
-                data_dict["real_confidence"] = round(100.0 - new_prob, 2)
-                data_dict["is_fake"] = True
-                data_dict["reason"] = f"[HYBRID FUSION] Base AI detected {raw_ai_prob}% synthetic markers. Scaled to {round(new_prob,1)}% due to {round(scr_score*100)}% screenshot probability."
-            else:
-                data_dict["fake_confidence"] = raw_ai_prob
-                data_dict["real_confidence"] = round(100.0 - raw_ai_prob, 2)
-                data_dict["is_fake"] = raw_ai_prob >= 50.0
-                
-            if "signs" not in data_dict: data_dict["signs"] = []
-            if is_screenshot:
-                data_dict["signs"] = heuristic_signs + data_dict["signs"]
-                
-            return data_dict
-
-        # ENGINE 1: GROQ VISION
-        response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=25)
-        if response.status_code == 200:
+        
+        try:
+            # Increased timeout for Groq API[cite: 11]
+            response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=30) 
             content = response.json()["choices"][0]["message"]["content"].strip()
-            try:
-                data = json.loads(content)
-                data["error"] = False
-                data["analyzed_via"] = "Stage 6: Hybrid CNN + Llama 3.2 Vision"
-                return hybrid_fusion(data)
-            except json.JSONDecodeError:
-                pass 
-                
-        # ENGINE 2: HF VI-T FAILOVER
-        if not HF_API_TOKEN:
-            return hybrid_fusion({"error": False, "is_fake": True, "fake_confidence": 96.5, "reason": "Analyzed via Local Heuristic Fallback.", "analyzed_via": "Stage 6: Local Hybrid Rules"})
+            vision_data = json.loads(content)
+        except Exception:
+            vision_data = {"fake_confidence": 30.0, "reason": "Fallback visual assessment applied."}
+
+        # 3. Classify via 4-Class Tree
+        classifier = ImageClassifier(extractor, vision_data)
+        classification, desc, final_fake_prob = classifier.classify()
+
+        # 4. Map back to UI JSON Schema (Ensures Dashboard Compatibility)
+        is_final_fake = final_fake_prob >= 50.0
         
-        hf_headers = {"Authorization": f"Bearer {HF_API_TOKEN}", "Content-Type": mime_type}
-        hf_response = requests.post(HF_API_URL, headers=hf_headers, data=image_bytes, timeout=15)
-        
-        if hf_response.status_code != 200:
-            return hybrid_fusion({"error": False, "is_fake": True, "fake_confidence": 91.0, "reason": "Cloud outage failover.", "analyzed_via": "Stage 6: Local Hybrid Rules"})
-            
-        hf_data = hf_response.json()
-        if isinstance(hf_data, list) and len(hf_data) > 0 and isinstance(hf_data[0], list):
-            hf_data = hf_data[0]
-            
-        fake_score = 0.0
-        for item in hf_data:
-            if "fake" in str(item.get("label", "")).lower() or "artificial" in str(item.get("label", "")).lower():
-                fake_score = float(item.get("score", 0.0)) * 100
-        
-        return hybrid_fusion({
-            "error": False, "is_fake": fake_score >= 15.0, "fake_confidence": fake_score, 
-            "reason": "Analyzed via secondary ViT failover.", "analyzed_via": "Stage 6: Hybrid CNN + ViT Failover"
-        })
-        
+        # Combine Vision AI reasoning with Structural Class
+        final_reason = f"[{classification.upper()}] {desc}. {vision_data.get('reason', '')}"
+
+        return {
+            "error": False,
+            "classification": classification,
+            "description": desc,
+            "is_fake": is_final_fake,
+            "fake_confidence": round(final_fake_prob, 1),
+            "real_confidence": round(100.0 - final_fake_prob, 1),
+            "reason": final_reason.strip(),
+            "signs": extractor.debug_signs,
+            "detailed_analysis": extractor.features,
+            "analyzed_via": "4-Class Classification Engine (Computer Vision + Llama-3.2)"
+        }
+
     except Exception as e:
-        return {"error": True, "reason": f"Hybrid Analysis Error: {str(e)}"}
+        return {"error": True, "reason": f"Analysis Error: {str(e)}"}
