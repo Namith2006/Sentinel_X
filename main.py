@@ -257,6 +257,19 @@ class ChatRequest(BaseModel):
 # ------------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------------
+def to_json_serializable(val: Any) -> Any:
+    """Recursively converts NumPy types into native Python types for JSON."""
+    if isinstance(val, dict):
+        return {k: to_json_serializable(v) for k, v in val.items()}
+    elif isinstance(val, (list, tuple, set)):
+        return [to_json_serializable(x) for x in val]
+    elif hasattr(val, "item"):  # np.bool_, np.float64, np.int64
+        return val.item()
+    elif hasattr(val, "tolist"):  # np.ndarray
+        return val.tolist()
+    return val
+
+
 def _coerce_url_payload(payload: dict | None, form_url: str | None) -> str:
     if payload and isinstance(payload, dict) and payload.get("url"):
         return str(payload["url"]).strip()
@@ -398,6 +411,7 @@ async def api_scan_url(
         }
 
     result = _normalize_phishing(raw, target)
+    result = to_json_serializable(result)
 
     try:
         log_event(
@@ -440,15 +454,17 @@ async def api_scan_image(file: UploadFile = File(...)):
             except OSError:
                 pass
 
+    # Normalize output and strictly enforce JSON-compatible Python types
     result = _normalize_image(raw, original_filename)
+    result = to_json_serializable(result)
     
     try:
         log_event(
             threat_type="deepfake",
-            risk_score=result["risk_score"] / 100.0,
+            risk_score=float(result["risk_score"]) / 100.0,
             details={
                 "filename": result["filename"],
-                "is_fake": result["is_fake"],
+                "is_fake": bool(result["is_fake"]),
             },
         )
     except Exception:
@@ -503,6 +519,8 @@ async def api_check_password(payload: dict):
         "status": status_text,
         "suggestion": " ".join(suggestions) or "Looks good — keep using a unique password manager.",
     }
+
+    result = to_json_serializable(result)
 
     try:
         log_event(
