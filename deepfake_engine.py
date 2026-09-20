@@ -94,10 +94,10 @@ class EnhancedFeatureExtractor:
 
         ai_score = (smoothness_score * 0.4 + freq_score * 0.35 + entropy_score * 0.25)
         self.features['combined_ai_score'] = ai_score
-        self.features['is_likely_ai'] = ai_score >= 0.45  # Optimized threshold
+        self.features['is_likely_ai'] = ai_score >= 0.45 
         
         if self.features['is_likely_ai']:
-            self.debug_signs.append(f"Visual Math: Low-entropy smoothness pattern matches generative diffusion ({round(ai_score,2)}).")
+            self.debug_signs.append(f"Visual Math: Low-entropy pattern matches generative diffusion ({round(ai_score,2)}).")
 
     def extract_text_features(self, img):
         try:
@@ -130,18 +130,17 @@ class ImageClassifier:
             feat.get('ela_compression', 0.0) > 8.0
         )
                          
-        # 2. Content Check (AI Anomaly)
-        # If either the vision AI OR our classical frequency/entropy math flags it:
+        # 2. Content Check (AI Anomaly) - Lowered tripwire to 20.0% to catch washed screenshots
         is_ai = (
-            raw_vision_score >= 35.0 or 
+            raw_vision_score >= 20.0 or 
             feat.get('is_likely_ai', False) or 
             feat.get('has_ai_watermark', False)
         )
                  
-        # 3. 4-Class Classification
+        # 3. 4-Class Classification Multipliers
         if is_screenshot and is_ai:
             classification = "4_AI_Screenshot"
-            confidence = max(88.5, raw_vision_score * 2.5)
+            confidence = max(88.5, raw_vision_score * 2.8)
             desc = "Screenshot / Compressed AI-generated image"
         elif is_screenshot and not is_ai:
             classification = "2_Real_Screenshot"
@@ -156,7 +155,7 @@ class ImageClassifier:
             confidence = min(15.0, raw_vision_score)
             desc = "Authentic camera photograph"
             
-        return classification, desc, min(98.5, confidence)
+        return classification, desc, min(99.9, confidence)
 
 
 # ==========================================
@@ -191,11 +190,10 @@ def analyze_image(image_path: str) -> dict:
         extractor.extract_ai_artifacts(cv_img)
         extractor.extract_text_features(img)
 
-        # Cleanup memory
         del cv_img
         gc.collect()
 
-        # Step 3: Query Vision Model with safe payload
+        # Step 3: Query Active Vision Model
         system_prompt = """You are an elite digital forensics AI. 
 Evaluate this image for synthetic AI generation markers:
 1. Cardboard / Sign Text: Check if handwriting/typography looks digitally stamped, warped, or synthetically rendered.
@@ -210,7 +208,7 @@ Respond STRICTLY in JSON:
             "Content-Type": "application/json"
         }
         
-        # Primary model updated to Groq's currently supported active vision model
+        # Primary model updated to Qwen3.8-27b (since Llama 90B was decommissioned)
         models_to_try = ["qwen/qwen3.8-27b", "llama-3.2-11b-vision-preview"]
         vision_data = None
         last_error = ""
@@ -243,13 +241,11 @@ Respond STRICTLY in JSON:
             except Exception as e:
                 last_error = str(e)
 
-        # If the Cloud API fails, rely on local visual math and output a CLEAN professional reason
+        # If Cloud API fails, rely on local visual math with a professional output reason
         if not vision_data:
             math_score = 85.0 if extractor.features.get('is_likely_ai', False) else 40.0
-            
-            # Format a professional forensic string instead of dumping the API crash logs
             if math_score >= 50.0:
-                clean_reason = "Analyzed via Local Forensic Math. Structural algorithms detected significant generative anomalies matching synthetic media."
+                clean_reason = "Analyzed via Local Forensic Math. Generative anomalies detected matching synthetic media."
             else:
                 clean_reason = "Analyzed via Local Forensic Math. Visual frequencies appear consistent with authentic optical capture."
                 
@@ -258,7 +254,7 @@ Respond STRICTLY in JSON:
                 "reason": clean_reason
             }
 
-        # Step 4: Classify via 4-Class Decision Matrix (Logic remains exactly the same)
+        # Step 4: Classify via 4-Class Decision Matrix
         classifier = ImageClassifier(extractor, vision_data)
         classification, desc, final_fake_prob = classifier.classify()
 
@@ -276,7 +272,7 @@ Respond STRICTLY in JSON:
             "reason": final_reason.strip(),
             "signs": extractor.debug_signs,
             "detailed_analysis": extractor.features,
-            "analyzed_via": "4-Class Forensics Engine (Local Computer Vision + Llama-3.2)"
+            "analyzed_via": "4-Class Forensics Engine (Local Computer Vision + API)"
         }
 
     except Exception as e:
