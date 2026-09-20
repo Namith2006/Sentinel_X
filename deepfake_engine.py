@@ -112,6 +112,9 @@ class EnhancedFeatureExtractor:
 # ==========================================
 # 🧠 DECISION CLASSIFIER LOGIC
 # ==========================================
+# ==========================================
+# 🧠 DECISION CLASSIFIER LOGIC
+# ==========================================
 class ImageClassifier:
     def __init__(self, extractor, vision_data):
         self.extractor = extractor
@@ -120,6 +123,7 @@ class ImageClassifier:
     def classify(self):
         feat = self.extractor.features
         raw_vision_score = float(self.vision_data.get("fake_confidence", 0.0))
+        is_vision_ai_flag = self.vision_data.get("is_ai")
         
         # 1. Container Check (Screenshot / Screen Re-compression)
         is_screenshot = (
@@ -130,33 +134,45 @@ class ImageClassifier:
             feat.get('ela_compression', 0.0) > 8.0
         )
                          
-        # 2. Content Check (AI Anomaly) - Lowered tripwire to 20.0% to catch washed screenshots
+        # 2. Content Check: Cross-Validation Fusion
+        # Fusing the LLM's visual assessment with the OpenCV mathematical algorithms
+        math_ai_score = feat.get('combined_ai_score', 0.0) * 100
+        
+        # Authentic screenshots retain optical noise (low math score). 
+        # AI screenshots have low-entropy pixel structures (high math score).
+        fused_ai_score = (raw_vision_score * 0.6) + (math_ai_score * 0.4)
+        
         is_ai = (
-            raw_vision_score >= 20.0 or 
-            feat.get('is_likely_ai', False) or 
+            raw_vision_score >= 45.0 or 
+            (is_vision_ai_flag is True) or
+            fused_ai_score >= 32.0 or 
             feat.get('has_ai_watermark', False)
         )
                  
         # 3. 4-Class Classification Multipliers
         if is_screenshot and is_ai:
             classification = "4_AI_Screenshot"
-            confidence = max(88.5, raw_vision_score * 2.8)
+            # Boost based on the fused algorithmic score to guarantee critical threat tier
+            confidence = max(88.5, fused_ai_score * 2.6)
             desc = "Screenshot / Compressed AI-generated image"
+            
         elif is_screenshot and not is_ai:
             classification = "2_Real_Screenshot"
-            confidence = min(25.0, raw_vision_score)
+            # Strictly cap real screenshots so they never trigger a false positive
+            confidence = min(25.0, fused_ai_score)
             desc = "Screenshot of an authentic photograph"
+            
         elif is_ai and not is_screenshot:
             classification = "3_AI_Native"
             confidence = max(80.0, raw_vision_score)
             desc = "Direct AI-generated media"
+            
         else:
             classification = "1_Real_Native"
             confidence = min(15.0, raw_vision_score)
             desc = "Authentic camera photograph"
             
         return classification, desc, min(99.9, confidence)
-
 
 # ==========================================
 # 🚀 MAIN ANALYSIS ENDPOINT
