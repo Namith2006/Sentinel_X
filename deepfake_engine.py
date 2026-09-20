@@ -36,7 +36,7 @@ class TrueForensicEnsemble:
             self.signs.append("Container Analysis: Image lacks native metadata or exhibits uniform recompression (Screenshot/WhatsApp).")
 
     def calculate_math_threat(self, cv_img):
-        """Step 2: Sensitive Spatial Math"""
+        """Step 2: Sensitive Spatial Math (Fixed 0.0% Blind Spot)"""
         gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
         
         # 1. Laplacian Variance
@@ -92,39 +92,39 @@ class TrueForensicEnsemble:
         return self.features.get('math_threat', 0.0)
 
     def fuse_and_classify(self, cnn_threat):
-        """Step 4: The Confidence Floor System"""
+        """Step 4: The WhatsApp-Aware Hard Veto System"""
         math_threat = float(self.features['math_threat'])
         is_screenshot = bool(self.features['is_screenshot'])
 
         base_score = cnn_threat
         multiplier = 1.0
+        forced_cap = None
 
         if is_screenshot:
-            if math_threat > 50.0:
-                # Clear Fake Boost
-                multiplier = 1.05
-                self.signs.append(f"Confidence Floor: Math confirms AI ({round(math_threat, 1)}%). Boosting score.")
-            elif math_threat >= 15.0:
-                # Neutral Zone (15% - 50%)
-                multiplier = 0.95
-                self.signs.append(f"Confidence Floor: Math in neutral zone ({round(math_threat, 1)}%). Minor penalty applied.")
+            if math_threat >= 55.0:
+                # Math leans fake: Trust the AI fully.
+                multiplier = 1.0
+                self.signs.append(f"Hard Veto Logic: Math corroborates synthetic patterns ({round(math_threat, 1)}%). Trusting AI.")
+            elif math_threat >= 35.0:
+                # Neutral zone: Strong 50% penalty to AI.
+                multiplier = 0.5
+                self.signs.append(f"Hard Veto Logic: Math is neutral ({round(math_threat, 1)}%). Applying 0.5x penalty to AI.")
             else:
-                # True Real Veto (< 15%)
-                multiplier = 0.45
-                self.signs.append(f"Confidence Floor: Math strongly suggests REAL ({round(math_threat, 1)}%). Strong veto applied.")
+                # Math leans real (< 35%): Hard Veto
+                multiplier = 1.0
+                forced_cap = 49.0  # Force it to remain below the 50.0% Fake line
+                self.signs.append(f"Hard Veto Logic: Math strongly suggests REAL ({round(math_threat, 1)}%). FORCING REAL STATUS to override AI hallucination.")
         else:
             # Native image. Trust the AI heavily.
             if math_threat < 15.0:
                 multiplier = 0.85
-                self.signs.append(f"Confidence Floor: Native image with very low math threat. Multiplier: 0.85x.")
+                self.signs.append(f"Native Image Check: Very low math threat. Multiplier: 0.85x.")
 
         fused_score = base_score * multiplier
 
-        # High-Confidence Pass (The Floor)
-        if base_score > 85.0 and math_threat >= 15.0:
-            if fused_score < 51.0:
-                fused_score = 51.0
-                self.signs.append("Confidence Floor: CNN confidence > 85%. Enforcing 50%+ floor to prevent False Negative.")
+        # Apply the hard veto cap if triggered
+        if forced_cap is not None:
+            fused_score = min(fused_score, forced_cap)
 
         fused_score = max(0.0, min(100.0, fused_score))
         is_fake = bool(fused_score >= 50.0)
@@ -143,7 +143,7 @@ class TrueForensicEnsemble:
             classification = "1_Real_Native"
             desc = "Authentic camera photograph"
             
-        reason = f"[{classification.upper()}] Confidence Floor Fusion: CNN Base ({round(base_score, 1)}%) modified to {round(fused_score, 1)}% based on Spatial Math ({round(math_threat, 1)}%)."
+        reason = f"[{classification.upper()}] WhatsApp-Aware Veto Fusion: CNN Base ({round(base_score, 1)}%) modified to {round(fused_score, 1)}% based on Spatial Math ({round(math_threat, 1)}%)."
             
         return classification, desc, fused_score, reason
 
@@ -195,7 +195,7 @@ def analyze_image(image_path: str) -> dict:
             "reason": str(reason),
             "signs": ensemble.signs,
             "detailed_analysis": ensemble.features,
-            "analyzed_via": "Sentinel X Confidence Floor System"
+            "analyzed_via": "Sentinel X WhatsApp-Aware Veto System"
         }
 
     except Exception as e:
