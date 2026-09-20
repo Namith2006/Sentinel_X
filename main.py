@@ -29,7 +29,7 @@ from typing import Any
 import requests
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -91,7 +91,7 @@ def compute_security_score() -> int:
 
     events = ledger.chain[1:] if len(ledger.chain) > 1 else []
     if not events:
-        return 88  
+        return 88
 
     for block in events:
         risk = float(block.get("risk_score", 0) or 0)
@@ -164,7 +164,7 @@ def hibp_pwned_count(password: str) -> int:
                 return int(count.strip())
         return 0
     except Exception:
-        return 0 
+        return 0
 
 
 def password_strength_label(score: int, breached: bool, common: bool) -> str:
@@ -177,7 +177,7 @@ def password_strength_label(score: int, breached: bool, common: bool) -> str:
 
 
 # ------------------------------------------------------------------------
-# FastAPI app + CORS Middleware
+# FastAPI app + CORS Configuration
 # ------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -188,7 +188,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Sentinel X API", version="2.0", lifespan=lifespan)
 
-# Comprehensive CORS Configuration to allow Vercel and local development origins
 origins = [
     "https://sentinel-x-navy.vercel.app",
     "http://localhost:3000",
@@ -204,7 +203,45 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def universal_exception_handler(request: Request, exc: Exception):
+    origin = request.headers.get("origin", "*")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": True,
+            "status": "SYSTEM MESSAGE",
+            "reason": f"Internal Server Error: {str(exc)}",
+            "signs": ["Backend encountered an unhandled exception.", str(exc)],
+        },
+        headers={
+            "Access-Control-Allow-Origin": origin if origin else "*",
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    origin = request.headers.get("origin", "*")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": True,
+            "status": "HTTP ERROR",
+            "reason": exc.detail,
+            "signs": [f"HTTP Error Status: {exc.status_code}"],
+        },
+        headers={
+            "Access-Control-Allow-Origin": origin if origin else "*",
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
+
 
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -262,7 +299,7 @@ def _normalize_image(raw: dict, filename: str) -> dict:
             "risk_score": 0.0,
             "status": "SYSTEM MESSAGE",
             "reason": raw.get("reason", "An unknown error occurred."),
-            "signs": ["Please check server connection.", "Awaiting AI activation."],
+            "signs": raw.get("signs", ["Please check server connection.", "Awaiting AI activation."]),
             "analyzed_via": "Error Handler",
             "details": raw,
         }
@@ -391,7 +428,11 @@ async def api_scan_image(file: UploadFile = File(...)):
 
         raw = analyze_image(tmp_path)
     except Exception as exc:
-        raw = {"error": True, "reason": f"Analysis engine error: {str(exc)}"}
+        raw = {
+            "error": True, 
+            "reason": f"Analysis engine error: {str(exc)}",
+            "signs": ["Error occurred during image processing.", str(exc)]
+        }
     finally:
         if tmp_path and os.path.exists(tmp_path):
             try:
