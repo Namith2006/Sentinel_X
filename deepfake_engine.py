@@ -36,20 +36,20 @@ class TrueForensicEnsemble:
             self.signs.append("Container Analysis: Image lacks native metadata or exhibits uniform recompression (Screenshot/WhatsApp).")
 
     def calculate_math_threat(self, cv_img):
-        """Step 2: Sensitive Spatial Math (Fixed 0.0% Blind Spot)"""
+        """Step 2: Sensitive Spatial Math"""
         gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
         
-        # 1. Laplacian Variance - Widened gradient to stop 0.0% clamping
+        # 1. Laplacian Variance
         lap_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
         smoothness_threat = max(0.0, min(100.0, (600.0 - lap_var) / 6.0))
         
-        # 2. Pixel Entropy - Softened multiplier
+        # 2. Pixel Entropy
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
         hist = hist.ravel() / (hist.sum() + 1e-7)
         entropy = float(-np.sum(hist * np.log2(hist + 1e-7)))
         entropy_threat = max(0.0, min(100.0, (7.8 - entropy) * 40.0))
         
-        # 3. FFT High-Frequency Energy Ratio - Increased baseline sensitivity
+        # 3. FFT High-Frequency Energy Ratio
         roi = cv2.resize(gray, (256, 256))
         f = np.fft.fft2(roi)
         fshift = np.fft.fftshift(f)
@@ -92,34 +92,41 @@ class TrueForensicEnsemble:
         return self.features.get('math_threat', 0.0)
 
     def fuse_and_classify(self, cnn_threat):
-        """Step 4: The Weighted Veto (Soft Veto) Fusion"""
+        """Step 4: The Confidence Floor System"""
         math_threat = float(self.features['math_threat'])
         is_screenshot = bool(self.features['is_screenshot'])
 
-        # AI is the baseline
         base_score = cnn_threat
         multiplier = 1.0
 
         if is_screenshot:
             if math_threat > 50.0:
-                multiplier = 1.0
-                self.signs.append(f"Weighted Veto: Math confirms AI ({round(math_threat, 1)}%). Multiplier: 1.0x.")
-            elif math_threat > 35.0:
-                # Moderate threshold: Math is unsure. Slight penalty to AI.
-                multiplier = 0.85
-                self.signs.append(f"Weighted Veto: Math is moderate ({round(math_threat, 1)}%). Multiplier: 0.85x.")
+                # Clear Fake Boost
+                multiplier = 1.05
+                self.signs.append(f"Confidence Floor: Math confirms AI ({round(math_threat, 1)}%). Boosting score.")
+            elif math_threat >= 15.0:
+                # Neutral Zone (15% - 50%)
+                multiplier = 0.95
+                self.signs.append(f"Confidence Floor: Math in neutral zone ({round(math_threat, 1)}%). Minor penalty applied.")
             else:
-                # Very Low threshold (< 35%): Math strongly suggests REAL. Heavy penalty to counter hallucination.
-                multiplier = 0.5
-                self.signs.append(f"Weighted Veto: Math strongly suggests REAL ({round(math_threat, 1)}%). Throttling CNN hallucination. Multiplier: 0.5x.")
+                # True Real Veto (< 15%)
+                multiplier = 0.45
+                self.signs.append(f"Confidence Floor: Math strongly suggests REAL ({round(math_threat, 1)}%). Strong veto applied.")
         else:
-            # Native image. Trust the AI heavily, but apply a tiny sanity check if math is completely clean.
-            if math_threat < 20.0:
-                multiplier = 0.9
-                self.signs.append(f"Weighted Veto: Native image with very low math threat. Multiplier: 0.9x.")
+            # Native image. Trust the AI heavily.
+            if math_threat < 15.0:
+                multiplier = 0.85
+                self.signs.append(f"Confidence Floor: Native image with very low math threat. Multiplier: 0.85x.")
 
-        # Apply multiplier and lock bounds
-        fused_score = max(0.0, min(100.0, base_score * multiplier))
+        fused_score = base_score * multiplier
+
+        # High-Confidence Pass (The Floor)
+        if base_score > 85.0 and math_threat >= 15.0:
+            if fused_score < 51.0:
+                fused_score = 51.0
+                self.signs.append("Confidence Floor: CNN confidence > 85%. Enforcing 50%+ floor to prevent False Negative.")
+
+        fused_score = max(0.0, min(100.0, fused_score))
         is_fake = bool(fused_score >= 50.0)
 
         # 4-Class Matrix
@@ -136,7 +143,7 @@ class TrueForensicEnsemble:
             classification = "1_Real_Native"
             desc = "Authentic camera photograph"
             
-        reason = f"[{classification.upper()}] Weighted Veto Fusion: CNN Base ({round(base_score, 1)}%) applied with {multiplier}x Multiplier based on Spatial Math ({round(math_threat, 1)}%). Final probability: {round(fused_score, 1)}%."
+        reason = f"[{classification.upper()}] Confidence Floor Fusion: CNN Base ({round(base_score, 1)}%) modified to {round(fused_score, 1)}% based on Spatial Math ({round(math_threat, 1)}%)."
             
         return classification, desc, fused_score, reason
 
@@ -188,7 +195,7 @@ def analyze_image(image_path: str) -> dict:
             "reason": str(reason),
             "signs": ensemble.signs,
             "detailed_analysis": ensemble.features,
-            "analyzed_via": "Sentinel X Weighted Veto Fusion"
+            "analyzed_via": "Sentinel X Confidence Floor System"
         }
 
     except Exception as e:
