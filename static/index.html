@@ -780,7 +780,7 @@
         box.className = "mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono text-purple-200 relative pr-8";
         box.innerHTML = closeBtn + "⏳ ANALYZING IMAGE...";
         
-        try {
+       try {
             const formData = new FormData();
             formData.append("file", file);
             const response = await fetch(`${API}/api/scan-image`, { 
@@ -788,65 +788,26 @@
                 body: formData 
             });
             
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            // NEW: Extract the exact FastAPI error if the request fails
+            if (!response.ok) {
+                let srvErr = `HTTP ${response.status}`;
+                try {
+                    const errJson = await response.json();
+                    srvErr = errJson.reason || errJson.detail || srvErr;
+                    if (Array.isArray(srvErr)) srvErr = "HTTP 422: Missing python-multipart library.";
+                } catch (e) {}
+                throw new Error(srvErr);
+            }
+            
             const data = await response.json();
             
-            if (data.status === "SYSTEM MESSAGE" || data.error) {
-                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
-                box.innerHTML = closeBtn + `
-                    <div><strong>Result:</strong> ⚠️ API ERROR</div>
-                    <div class="break-all"><strong>File:</strong> ${file.name}</div>
-                    <div class="mt-2 text-xs text-slate-300 border-t border-rose-500/30 pt-2 leading-relaxed">
-                        <span class="font-bold text-rose-400">Analysis:</span> ${data.reason || "Cloud AI failed to respond."}
-                    </div>`;
-                setEngine("deepfake", "offline");
-                return; 
-            }
-
-            // Trust the backend's verdict and extract probability
-            const prob = data.fake_confidence || 0;
-            const isUncertain = data.classification && data.classification.toLowerCase().includes("uncertain");
-            const isFake = data.is_fake;
-
-            let theme, title, colorClass;
+            // ... [Keep all your existing data rendering logic here] ...
             
-            if (isUncertain) {
-                theme = "amber";
-                title = "⚠️ UNCERTAIN";
-                colorClass = "text-amber-400";
-            } else if (isFake) {
-                theme = "rose";
-                title = "🚨 DEEPFAKE DETECTED";
-                colorClass = "text-rose-400";
-            } else {
-                theme = "emerald";
-                title = "✅ AUTHENTIC";
-                colorClass = "text-emerald-400";
-            }
-
-            const formattedReason = (data.reason || "Analysis complete.").replace(/\\n|\n/g, '<br>');
-
-            box.className = `mt-3 p-3 rounded-lg text-sm font-mono bg-${theme}-500/10 border border-${theme}-500/40 text-${theme}-200 relative pr-8`;
-            box.innerHTML = closeBtn + `
-                <div><strong>Result:</strong> ${title}</div>
-                <div class="break-all"><strong>File:</strong> ${file.name}</div>
-                <div class="mt-1"><strong>Deepfake Probability:</strong> ${prob.toFixed(1)}%</div>
-                <div class="w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2">
-                    <div class="h-full bg-${theme}-400" style="width:${Math.min(100, prob)}%"></div>
-                </div>
-                <div class="mt-2 text-xs text-slate-300 border-t border-${theme}-500/30 pt-2 leading-relaxed">
-                    <div class="mt-1 opacity-90">${formattedReason}</div>
-                </div>`;
-                
-            if (isFake) triggerMitigation("deepfake", { filename: file.name, probability: prob, ...data });
-            logLedger("deepfake", isFake ? "THREAT" : (isUncertain ? "UNCERTAIN" : "AUTHENTIC"));
-            setEngine("deepfake", "online");
-            setBackend("online");
         } catch (err) {
-            showApiError(box, 'imageInput', 'fileName', "Deepfake");
+            // NEW: Pass the exact error message to the UI
+            showApiError(box, 'imageInput', 'fileName', "Deepfake", err.message);
             logLedger("deepfake", "API ERROR");
             setEngine("deepfake", "offline");
-            setBackend("offline");
         }
     }
 
