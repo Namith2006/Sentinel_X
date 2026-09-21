@@ -19,7 +19,7 @@ class MultiPillarForensicEnsemble:
         self.pillars = {}
         
     def analyze_container(self, img: Image.Image):
-        """Pillar 1: Metadata Verification & Error Level Compression"""
+        """Pillar 1: Metadata Verification & Compression Context"""
         exif = img.getexif()
         has_native_metadata = bool(exif and (0x010f in exif or 0x0110 in exif))
         self.features['has_native_metadata'] = has_native_metadata
@@ -127,78 +127,46 @@ class MultiPillarForensicEnsemble:
         return float(self.features.get('math_threat', 0.0))
 
     def fuse_and_classify(self, cnn_threat: float):
-        """Step 5: Compression-Aware Forensic Fusion"""
+        """Step 4: Hybrid Forensic Decision Tree (Signal + Context Fusion)"""
         math_threat = float(self.features['math_threat'])
-        quality = str(self.features.get('image_quality', 'Medium'))
-        is_screenshot = bool(self.features.get('is_screenshot', False))
-        has_metadata = bool(self.features.get('has_native_metadata', False))
+        quality = self.features.get('image_quality', 'Medium')
+        is_screenshot = self.features.get('is_screenshot', False)
 
-        # --- THE COMPRESSION OFFSET (The Fix for WhatsApp Images) ---
-        compression_offset = 0.0
-        if quality == "Medium":
-            compression_offset = 15.0
-        elif quality == "Low":
-            compression_offset = 25.0
+        # --- PILLAR 1: THE CONTEXT FILTER (The "WhatsApp" Fix) ---
+        is_compressed = (quality == "Medium" or quality == "Low")
 
-        adjusted_cnn = max(0.0, cnn_threat - compression_offset)
-        adjusted_math = max(0.0, math_threat - compression_offset)
-        
-        if compression_offset > 0:
-            self.signs.append(f"Compression Filter: Offset of -{compression_offset}% applied to mitigate synthetic hallucinations.")
+        # --- PILLAR 2: THE SMOKING GUN ---
+        if cnn_threat > 85.0 and math_threat > 85.0 and not is_compressed:
+            self.signs.append("Forensic Trigger: High AI confidence combined with Spectral Spikes creates a 'Smoking Gun' signature.")
+            return "3_AI_Native", "Direct AI-generated media", 95.0, "Multi-Pillar Confirmation: CNN and Spectral analysis both show extreme synthetic markers.", True
 
-        # 1. Balanced Weights
-        ai_w, math_w = 0.60, 0.40
-        fused_score = (adjusted_cnn * ai_w) + (adjusted_math * math_w)
-
-        # 2. Native Camera Whitelist Bias
-        if has_metadata and not is_screenshot:
-            self.signs.append("Forensic Whitelist: Native camera metadata detected. Applying authenticity bias (-50%).")
-            fused_score *= 0.5
-
-        # 3. The "Real-World" Veto
-        if adjusted_math < 20.0:
-            self.signs.append(f"Compression Filter: Spectral spikes attributed to JPEG compression rather than AI. Vetoing threat.")
-            fused_score = min(fused_score, adjusted_math + 20.0)
-
-        # 4. The "Smoking Gun" Logic
-        if cnn_threat > 80.0 and math_threat > 30.0:
-            fused_score = max(fused_score, 75.0)
-            self.signs.append("Forensic Trigger: High raw AI confidence combined with spatial anomalies creates a 'Smoking Gun' signature.")
-
-        fused_score = max(0.0, min(100.0, float(fused_score)))
-        
-        # Professional Threshold
-        is_fake = bool(fused_score >= 60.0)
-
-        # Forensic Tier Categorization
-        if fused_score >= 75.0:
-            verdict_label = "HIGH-CONFIDENCE DEEPFAKE"
-        elif fused_score >= 60.0:
-            verdict_label = "SUSPICIOUS / SYNTHETIC ARTIFACTS DETECTED"
-        elif fused_score >= 40.0:
-            verdict_label = "INCONCLUSIVE / COMPRESSED ASSET"
+        # --- PILLAR 3: THE COMPRESSION VETO (The "Selfie" Fix) ---
+        if is_compressed and math_threat < 60.0:
+            effective_cnn = cnn_threat * 0.5
+            fused_score = (effective_cnn + math_threat) / 2.0
+            self.signs.append("Hybrid Logic: Compression detected. Reducing AI weight to prevent False Positives.")
         else:
-            verdict_label = "AUTHENTIC MEDIA ASSET"
+            fused_score = (cnn_threat * 0.6) + (math_threat * 0.4)
+
+        # --- FINAL DECISION ---
+        fused_score = max(0.0, min(100.0, float(fused_score)))
+        is_fake = bool(fused_score >= 65.0)
 
         if is_screenshot and is_fake:
             classification = "4_AI_Screenshot"
-            desc = "Compressed/Screenshot AI-generated media"
+            desc = "Screenshot / Compressed AI-generated image"
         elif is_screenshot and not is_fake:
             classification = "2_Real_Screenshot"
-            desc = "Compressed authentic mobile photograph"
+            desc = "Screenshot / Compressed authentic photograph"
         elif is_fake and not is_screenshot:
             classification = "3_AI_Native"
-            desc = "Direct generative diffusion / GAN media"
+            desc = "Direct AI-generated media"
         else:
             classification = "1_Real_Native"
             desc = "Authentic camera photograph"
-            
-        reason = (
-            f"[{verdict_label}] Compression-Aware Fusion: Adjusted CNN ({round(adjusted_cnn, 1)}%) "
-            f"fused with Adjusted Math ({round(adjusted_math, 1)}%). "
-            f"Final Fused Probability: {round(fused_score, 1)}%."
-        )
-            
+
+        reason = f"[{classification.upper()}] Hybrid Verdict: Neural ({round(cnn_threat, 1)}%) and Math ({round(math_threat, 1)}%) fused with {quality.upper()} quality context. Final Score: {round(fused_score, 1)}%."
+
         return classification, desc, fused_score, reason, is_fake
 
 # ==========================================
@@ -245,7 +213,7 @@ def analyze_image(image_path: str) -> dict:
                 "has_native_metadata": bool(ensemble.features.get("has_native_metadata", False)),
                 "is_screenshot": bool(ensemble.features.get("is_screenshot", False))
             },
-            "analyzed_via": "Sentinel X Multi-Pillar Evidence Ensemble"
+            "analyzed_via": "Sentinel X Multi-Pillar Hybrid Ensemble"
         }
 
     except Exception as e:
