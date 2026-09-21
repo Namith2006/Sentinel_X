@@ -112,7 +112,7 @@
             <div class="mt-4 space-y-3 text-sm text-slate-300 leading-relaxed">
                 <p>• <strong>Sentinel X</strong> is an AI-powered cybersecurity suite providing real-time threat intelligence and endpoint telemetry.</p>
                 <p>• <strong>Phishing Engine:</strong> Features a hybrid pipeline combining machine learning, URLhaus OSINT feeds, and dynamic SSL/TLS validation.</p>
-                <p>• <strong>Deepfake Engine:</strong> Inspects visual assets for generative artifacts, frequency noise, and compression anomalies.</p>
+                <p>• <strong>Deepfake Engine:</strong> Inspects visual assets for generative artifacts, frequency noise, and compression anomalies utilizing the Quad-Gate Pipeline.</p>
                 <p>• <strong>Ledger & AI:</strong> Evaluates password entropy, logs all scans into an immutable SHA-256 ledger, and uses Llama-3 AI to mitigate threats.</p>
             </div>
             <div class="mt-6 flex justify-end">
@@ -435,7 +435,7 @@
 
     function bytesToB64Url(buf) {
         return btoa(String.fromCharCode(...new Uint8Array(buf)))
-            .replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
+            .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
     }
     function b64UrlToBytes(s) {
         s = s.replace(/-/g,'+').replace(/_/g,'/');
@@ -485,7 +485,7 @@
         closeResult('passwordResult', 'passwordInput');
         const expertPanel = $("expertPanel");
         const expertStatus = $("expertStatus");
-        if (expertPanel) expertPanel.innerHTML = '<div class=\"text-slate-500 text-sm italic flex items-center gap-2\"><span class=\"led-dot led-busy\"></span>No active incident. Mitigation engine is on standby.</div>';
+        if (expertPanel) expertPanel.innerHTML = '<div class="text-slate-500 text-sm italic flex items-center gap-2"><span class="led-dot led-busy"></span>No active incident. Mitigation engine is on standby.</div>';
         if (expertStatus) expertStatus.textContent = "standby";
     }
 
@@ -676,11 +676,11 @@
         let currentScore = 100;
         for (let i = saved.length - 1; i >= 0; i--) {
             const status = saved[i].status.toLowerCase();
-            if (status.includes("threat") || status.includes("compromised")) {
+            if (status.includes("threat") || status.includes("compromised") || status.includes("deepfake")) {
                 currentScore -= 20;
-            } else if (status.includes("error")) {
+            } else if (status.includes("error") || status.includes("uncertain")) {
                 currentScore -= 5;
-            } else if (status.includes("safe") || status.includes("strong") || status.includes("ok")) {
+            } else if (status.includes("safe") || status.includes("strong") || status.includes("ok") || status.includes("authentic")) {
                 currentScore += 10;
             }
             currentScore = Math.max(0, Math.min(100, currentScore));
@@ -720,23 +720,23 @@
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Status:</strong> 🚨 THREAT DETECTED</div>
-                    <div class=\"break-all\"><strong>URL:</strong> ${url}</div>
+                    <div class="break-all"><strong>URL:</strong> ${url}</div>
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
-                    <div class=\"text-xs text-rose-300/80 mt-1\">${data.reason || \"Phishing signal confirmed.\"}</div>`;
+                    <div class="text-xs text-rose-300/80 mt-1">${data.reason || "Phishing signal confirmed."}</div>`;
             } else if (isSuspicious) {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-amber-500/10 border border-amber-500/40 text-amber-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Status:</strong> ⚠️ SUSPICIOUS</div>
-                    <div class=\"break-all\"><strong>URL:</strong> ${url}</div>
+                    <div class="break-all"><strong>URL:</strong> ${url}</div>
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
-                    <div class=\"text-xs text-amber-300/80 mt-1\">${data.reason || \"Unverified or risky domain.\"}</div>`;
+                    <div class="text-xs text-amber-300/80 mt-1">${data.reason || "Unverified or risky domain."}</div>`;
             } else {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Status:</strong> ✅ SAFE</div>
-                    <div class=\"break-all\"><strong>URL:</strong> ${url}</div>
+                    <div class="break-all"><strong>URL:</strong> ${url}</div>
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
-                    <div class=\"text-xs text-emerald-300/80 mt-1\">${data.reason || \"No phishing indicators found.\"}</div>`;
+                    <div class="text-xs text-emerald-300/80 mt-1">${data.reason || "No phishing indicators found."}</div>`;
             }
             if (isThreat || isSuspicious) triggerMitigation("phishing", { url, risk, ...data });
             logLedger("phishing", isThreat ? "THREAT" : (isSuspicious ? "SUSPICIOUS" : "SAFE"));
@@ -755,19 +755,25 @@
         const input = $("imageInput");
         const file = (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]) || (input.files && input.files[0]) || null;
         const box = $("imageResult");
+        
         if (!file) return;
+        
         if (event.dataTransfer && event.dataTransfer.files[0]) {
             const dt = new DataTransfer();
             dt.items.add(file);
             input.files = dt.files;
         }
+        
         $("fileName").textContent = file.name;
         const closeBtn = `<button type="button" onclick="closeResult('imageResult', 'imageInput', 'fileName')" class="absolute top-2 right-2 p-1 text-slate-400 hover:text-white transition leading-none" title="Clear Result">✖</button>`;
+        
         setBackend("busy");
         setEngine("deepfake", "busy");
+        
         box.classList.remove("hidden");
         box.className = "mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono text-purple-200 relative pr-8";
         box.innerHTML = closeBtn + "⏳ ANALYZING IMAGE...";
+        
         try {
             const formData = new FormData();
             formData.append("file", file);
@@ -775,70 +781,63 @@
                 method: "POST", 
                 body: formData 
             });
+            
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
+            
             if (data.status === "SYSTEM MESSAGE" || data.error) {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Result:</strong> ⚠️ API ERROR</div>
-                    <div class=\"break-all\"><strong>File:</strong> ${file.name}</div>
-                    <div class=\"mt-2 text-xs text-slate-300 border-t border-rose-500/30 pt-2\">\n                        <span class=\"font-bold text-rose-400\">Analysis:</span> ${data.reason || \"Cloud AI failed to respond.\"}\n                        <ul class=\"mt-2 text-slate-400\">\n                            ${(data.signs || []).map(sign => `<li class=\"ml-4 list-disc text-[11px] text-slate-400 mt-0.5\">${sign}</li>`).join(\"\")}\n                        </ul>\n                    </div>`;
+                    <div class="break-all"><strong>File:</strong> ${file.name}</div>
+                    <div class="mt-2 text-xs text-slate-300 border-t border-rose-500/30 pt-2 leading-relaxed">
+                        <span class="font-bold text-rose-400">Analysis:</span> ${data.reason || "Cloud AI failed to respond."}
+                    </div>`;
                 setEngine("deepfake", "offline");
                 return; 
             }
-            const signsHtml = (data.signs || []).map(sign => `<li class=\"ml-4 list-disc text-[11px] text-slate-400 mt-0.5\">${sign}</li>`).join("");
-            if (data.verdict === "AI-GENERATED") {
-                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
-                box.innerHTML = closeBtn + `
-                    <div><strong>Result:</strong> 🚨 DEEPFAKE DETECTED</div>
-                    <div class=\"break-all\"><strong>File:</strong> ${file.name}</div>
-                    <div><strong>Deepfake Probability:</strong> ${data.fused_score.toFixed(1)}%</div>
-                    <div class=\"w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2\">
-                        <div class=\"h-full bg-rose-400\" style=\"width:${Math.min(100, data.fused_score)}%\"></div>
-                    </div>
-                    <div class=\"mt-2 text-xs text-slate-300 border-t border-rose-500/30 pt-2\">
-                        <span class=\"font-bold text-cyan-400\">Analysis:</span> ${data.reason || \"Generative artifacts detected.\"}
-                        <ul class=\"mt-2 text-slate-400\">
-                            ${signsHtml}
-                        </ul>
-                    </div>`;
-            } else if (data.verdict === "UNCERTAIN") {
-                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-amber-500/10 border border-amber-500/40 text-amber-200 relative pr-8";
-                box.innerHTML = closeBtn + `
-                    <div><strong>Result:</strong> ⚠️ UNCERTAIN</div>
-                    <div class=\"break-all\"><strong>File:</strong> ${file.name}</div>
-                    <div><strong>Deepfake Probability:</strong> ${data.fused_score.toFixed(1)}%</div>
-                    <div class=\"w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2\">
-                        <div class=\"h-full bg-amber-400\" style=\"width:${Math.min(100, data.fused_score)}%\"></div>
-                    </div>
-                    <div class=\"mt-2 text-xs text-slate-300 border-t border-amber-500/30 pt-2\">
-                        <span class=\"font-bold text-cyan-400\">Analysis:</span> ${data.reason || \"Inconclusive results.\"}
-                        <ul class=\"mt-2 text-slate-400\">
-                            ${signsHtml}
-                        </ul>
-                    </div>`;
+
+            // Trust the backend's verdict and extract probability
+            const prob = data.fake_confidence || 0;
+            const isUncertain = data.classification && data.classification.toLowerCase().includes("uncertain");
+            const isFake = data.is_fake;
+
+            let theme, title, colorClass;
+            
+            if (isUncertain) {
+                theme = "amber";
+                title = "⚠️ UNCERTAIN";
+                colorClass = "text-amber-400";
+            } else if (isFake) {
+                theme = "rose";
+                title = "🚨 DEEPFAKE DETECTED";
+                colorClass = "text-rose-400";
             } else {
-                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
-                box.innerHTML = closeBtn + `
-                    <div><strong>Result:</strong> ✅ AUTHENTIC</div>
-                    <div class=\"break-all\"><strong>File:</strong> ${file.name}</div>
-                    <div><strong>Deepfake Probability:</strong> ${data.fused_score.toFixed(1)}%</div>
-                    <div class=\"w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2\">
-                        <div class=\"h-full bg-emerald-400\" style=\"width:${Math.min(100, data.fused_score)}%\"></div>
-                    </div>
-                    <div class=\"mt-2 text-xs text-slate-300 border-t border-emerald-500/30 pt-2\">
-                        <span class=\"font-bold text-cyan-400\">Analysis:</span> ${data.reason || \"No synthetic anomalies found.\"}
-                        <ul class=\"mt-2 text-slate-400\">
-                            ${signsHtml}
-                        </ul>
-                    </div>`;
+                theme = "emerald";
+                title = "✅ AUTHENTIC";
+                colorClass = "text-emerald-400";
             }
-            if (data.verdict === "AI-GENERATED") triggerMitigation("deepfake", { filename: file.name, probability: data.fused_score, ...data });
-            logLedger("deepfake", data.verdict === "AI-GENERATED" ? "THREAT" : "SAFE");
+
+            const formattedReason = (data.reason || "Analysis complete.").replace(/\\n|\n/g, '<br>');
+
+            box.className = `mt-3 p-3 rounded-lg text-sm font-mono bg-${theme}-500/10 border border-${theme}-500/40 text-${theme}-200 relative pr-8`;
+            box.innerHTML = closeBtn + `
+                <div><strong>Result:</strong> ${title}</div>
+                <div class="break-all"><strong>File:</strong> ${file.name}</div>
+                <div class="mt-1"><strong>Deepfake Probability:</strong> ${prob.toFixed(1)}%</div>
+                <div class="w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2">
+                    <div class="h-full bg-${theme}-400" style="width:${Math.min(100, prob)}%"></div>
+                </div>
+                <div class="mt-2 text-xs text-slate-300 border-t border-${theme}-500/30 pt-2 leading-relaxed">
+                    <div class="mt-1 opacity-90">${formattedReason}</div>
+                </div>`;
+                
+            if (isFake) triggerMitigation("deepfake", { filename: file.name, probability: prob, ...data });
+            logLedger("deepfake", isFake ? "THREAT" : (isUncertain ? "UNCERTAIN" : "AUTHENTIC"));
             setEngine("deepfake", "online");
             setBackend("online");
         } catch (err) {
-            showApiError(box, 'imageInput', 'fileName', \"Deepfake\");
+            showApiError(box, 'imageInput', 'fileName', "Deepfake");
             logLedger("deepfake", "API ERROR");
             setEngine("deepfake", "offline");
             setBackend("offline");
@@ -869,27 +868,27 @@
             if (isCompromised || strength < 50) {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
                 box.innerHTML = closeBtn + `
-                    <div><strong>Status:</strong> 🚨 ${data.status || \"WEAK / COMPROMISED\"}</div>
+                    <div><strong>Status:</strong> 🚨 ${data.status || "WEAK / COMPROMISED"}</div>
                     <div><strong>Strength:</strong> ${strength}/100</div>
                     <div><strong>Breach History:</strong> Found in ${breachCount.toLocaleString()} known breaches</div>
-                    <div class=\"text-xs text-rose-300/80 mt-1\">${data.suggestion || \"Rotate this password immediately.\"}</div>`;
+                    <div class="text-xs text-rose-300/80 mt-1">${data.suggestion || "Rotate this password immediately."}</div>`;
             } else {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
                 box.innerHTML = closeBtn + `
-                    <div><strong>Status:</strong> ✅ ${data.status || \"STRONG\"}</div>
+                    <div><strong>Status:</strong> ✅ ${data.status || "STRONG"}</div>
                     <div><strong>Strength:</strong> ${strength}/100</div>
                     <div><strong>Breach History:</strong> 0 known breaches</div>
-                    <div class=\"text-xs text-emerald-300/80 mt-1\">${data.suggestion || \"Password looks strong.\"}</div>`;
+                    <div class="text-xs text-emerald-300/80 mt-1">${data.suggestion || "Password looks strong."}</div>`;
             }
             if (isCompromised) triggerMitigation("weak_password", { length: pw.length, breachCount, strength, ...data });
             logLedger("password", isCompromised ? "COMPROMISED" : (strength >= 80 ? "STRONG" : "OK"));
             setEngine("password", "online");
             setBackend("online");
         } catch (err) {
-            showApiError(box, 'passwordInput', null, \"Password\");
-            logLedger(\"password\", \"API ERROR\");
-            setEngine(\"password\", \"offline\");
-            setBackend(\"offline\");
+            showApiError(box, 'passwordInput', null, "Password");
+            logLedger("password", "API ERROR");
+            setEngine("password", "offline");
+            setBackend("offline");
         }
     }
 
@@ -910,8 +909,8 @@
             const url = details.url || "the flagged domain";
             const reason = details.reason || details.status || "Heuristic threat patterns detected";
             dynamicSteps = [
-                { title: "Network Isolation & Triage", detail: `Immediately block outbound connections to <span class=\"text-cyan-400 font-mono bg-cyber-900 px-1.5 py-0.5 rounded break-all\">${url}</span> at the firewall/DNS level.` },
-                { title: "Threat Eradication", detail: `The scanner identified a <span class=\"text-rose-400 font-mono font-bold\">${risk.toFixed(1)}%</span> risk score. Signal triggers: <span class=\"text-amber-400 italic\">${reason}</span>. Purge browser cache, cookies, and active session tokens on the affected endpoint.` },
+                { title: "Network Isolation & Triage", detail: `Immediately block outbound connections to <span class="text-cyan-400 font-mono bg-cyber-900 px-1.5 py-0.5 rounded break-all">${url}</span> at the firewall/DNS level.` },
+                { title: "Threat Eradication", detail: `The scanner identified a <span class="text-rose-400 font-mono font-bold">${risk.toFixed(1)}%</span> risk score. Signal triggers: <span class="text-amber-400 italic">${reason}</span>. Purge browser cache, cookies, and active session tokens on the affected endpoint.` },
                 { title: "Credential Verification", detail: "If any operator interacted with this URL, force an immediate zero-trust password rotation and verify hardware MFA keys." }
             ];
         } else if (threatType === "deepfake") {
@@ -919,8 +918,8 @@
             const conf = Number(details.fake_confidence || details.probability || risk).toFixed(1);
             const pipeline = details.analyzed_via || "Neural Tensor + Compression ELA";
             dynamicSteps = [
-                { title: "Digital Quarantine", detail: `Halt internal distribution of <span class=\"text-purple-400 font-mono bg-cyber-900 px-1.5 py-0.5 rounded break-all\">${file}</span>. Move the asset to an isolated forensic vault.` },
-                { title: "Forensic Analysis Breakdown", detail: `The pipeline (<span class=\"text-slate-400 font-mono text-[10px]\">${pipeline}</span>) identified synthetic manipulation with <span class=\"text-rose-400 font-mono font-bold\">${conf}%</span> confidence. High-frequency noise residuals match generative AI signatures.` },
+                { title: "Digital Quarantine", detail: `Halt internal distribution of <span class="text-purple-400 font-mono bg-cyber-900 px-1.5 py-0.5 rounded break-all">${file}</span>. Move the asset to an isolated forensic vault.` },
+                { title: "Forensic Analysis Breakdown", detail: `The pipeline (<span class="text-slate-400 font-mono text-[10px]">${pipeline}</span>) identified synthetic manipulation with <span class="text-rose-400 font-mono font-bold">${conf}%</span> confidence. High-frequency noise residuals match generative AI signatures.` },
                 { title: "Identity Verification", detail: "Do not trust the visual/audio claims in this media. Re-establish contact with the supposed entity via an out-of-band, cryptographically verified channel." }
             ];
         } else if (threatType === "weak_password") {
@@ -928,19 +927,41 @@
             const str = details.strength || 0;
             const hint = details.suggestion || "Requires higher entropy.";
             dynamicSteps = [
-                { title: "Immediate Secret Revocation", detail: `This exact string has appeared in <span class=\"text-rose-400 font-mono font-bold\">${breaches.toLocaleString()}</span> known data breaches across the clear and dark web. It is actively being targeted in credential stuffing attacks.` },
-                { title: "Complexity Audit", detail: `Current cryptographic strength is critically low (<span class=\"text-amber-400 font-mono font-bold\">${str}/100</span>). Engine recommendation: <span class=\"text-emerald-400 italic\">${hint}</span>` },
+                { title: "Immediate Secret Revocation", detail: `This exact string has appeared in <span class="text-rose-400 font-mono font-bold">${breaches.toLocaleString()}</span> known data breaches across the clear and dark web. It is actively being targeted in credential stuffing attacks.` },
+                { title: "Complexity Audit", detail: `Current cryptographic strength is critically low (<span class="text-amber-400 font-mono font-bold">${str}/100</span>). Engine recommendation: <span class="text-emerald-400 italic">${hint}</span>` },
                 { title: "Zero-Knowledge Implementation", detail: "Generate a 16+ character high-entropy passphrase via a zero-knowledge Password Manager. Enforce FIDO2/WebAuthn hardware keys for future authentication." }
             ];
         } else {
             dynamicSteps = [
-                { title: "Isolate Target", detail: `Quarantine the affected asset exhibiting a <span class=\"text-rose-400 font-mono\">${risk.toFixed(1)}%</span> risk profile.` },
+                { title: "Isolate Target", detail: `Quarantine the affected asset exhibiting a <span class="text-rose-400 font-mono">${risk.toFixed(1)}%</span> risk profile.` },
                 { title: "Eradicate Threat", detail: "Remove malicious artifacts and cycle all active operator session tokens." },
                 { title: "System Recovery", detail: "Restore baseline operations from a verified SHA-256 backup state." }
             ];
         }
         const planHtml = `
-            <div class=\"mb-4 flex items-center justify-between\">\n                <div>\n                    <p class=\"text-[10px] text-slate-500 uppercase tracking-widest\">Threat Vector</p>\n                    <p class=\"text-sm font-semibold text-cyan-200\">${threatType.toUpperCase()}</p>\n                </div>\n                <span class=\"px-2.5 py-1 rounded text-[10px] font-mono uppercase ${sevClass} shadow-sm\">${severity}</span>\n            </div>\n            <ol class=\"space-y-3\">\n                ${dynamicSteps.map((s, i) => `\n                    <li class=\"p-3.5 rounded-lg bg-cyber-800/40 border border-slate-700/50 shadow-inner\">\n                        <div class=\"flex items-start gap-3\">\n                            <div class=\"w-6 h-6 rounded bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5\">\n                                <span class=\"text-purple-400 font-mono text-xs\">${i+1}</span>\n                            </div>\n                            <div>\n                                <p class=\"text-sm font-semibold text-slate-200\">${s.title}</p>\n                                <p class=\"text-xs text-slate-400 mt-1.5 leading-relaxed\">${s.detail}</p>\n                            </div>\n                        </div>\n                    </li>`).join(\"\")}\n            </ol>\n            <p class=\"mt-4 text-[10px] text-slate-500 font-mono border-t border-slate-800 pt-2\">Generated by Context-Aware Engine · ${new Date().toLocaleTimeString()}</p>\n        `;
+            <div class="mb-4 flex items-center justify-between">
+                <div>
+                    <p class="text-[10px] text-slate-500 uppercase tracking-widest">Threat Vector</p>
+                    <p class="text-sm font-semibold text-cyan-200">${threatType.toUpperCase()}</p>
+                </div>
+                <span class="px-2.5 py-1 rounded text-[10px] font-mono uppercase ${sevClass} shadow-sm">${severity}</span>
+            </div>
+            <ol class="space-y-3">
+                ${dynamicSteps.map((s, i) => `
+                    <li class="p-3.5 rounded-lg bg-cyber-800/40 border border-slate-700/50 shadow-inner">
+                        <div class="flex items-start gap-3">
+                            <div class="w-6 h-6 rounded bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                                <span class="text-purple-400 font-mono text-xs">${i+1}</span>
+                            </div>
+                            <div>
+                                <p class="text-sm font-semibold text-slate-200">${s.title}</p>
+                                <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">${s.detail}</p>
+                            </div>
+                        </div>
+                    </li>`).join("")}
+            </ol>
+            <p class="mt-4 text-[10px] text-slate-500 font-mono border-t border-slate-800 pt-2">Generated by Context-Aware Engine · ${new Date().toLocaleTimeString()}</p>
+        `;
         panel.innerHTML = planHtml;
         status.textContent = "context loaded";
         setEngine("llm", "busy");
@@ -954,7 +975,29 @@
                 const d = await r.json();
                 if (d && Array.isArray(d.steps) && d.steps.length && d.source === "llm") {
                     const llmHtml = `
-                        <div class=\"mb-4 flex items-center justify-between\">\n                            <div>\n                                <p class=\"text-[10px] text-slate-500 uppercase tracking-widest\">Threat Vector</p>\n                                <p class=\"text-sm font-semibold text-cyan-200\">${(d.threat_type || threatType).toUpperCase()}</p>\n                            </div>\n                            <span class=\"px-2.5 py-1 rounded text-[10px] font-mono uppercase ${`sev-${d.severity || severity}`} shadow-sm\">${d.severity || severity}</span>\n                        </div>\n                        <ol class=\"space-y-3\">\n                            ${d.steps.slice(0, 3).map((s, i) => `\n                                <li class=\"p-3.5 rounded-lg bg-cyber-800/40 border border-slate-700/50 shadow-inner\">\n                                    <div class=\"flex items-start gap-3\">\n                                        <div class=\"w-6 h-6 rounded bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5\">\n                                            <span class=\"text-purple-400 font-mono text-xs\">${i+1}</span>\n                                        </div>\n                                        <div>\n                                            <p class=\"text-sm font-semibold text-slate-200\">${s.title || s.name || (\"Step \" + (i+1))}</p>\n                                            <p class=\"text-xs text-slate-400 mt-1.5 leading-relaxed\">${s.detail || s.description || \"\"}</p>\n                                        </div>\n                                    </div>\n                                </li>`).join(\"\")}\n                        </ol>\n                        <p class=\"mt-4 text-[10px] text-slate-500 font-mono border-t border-slate-800 pt-2\">Llama-3 (Ollama) · ${new Date().toLocaleTimeString()} · source: ${d.source || \"llm\"}</p>\n                    `;
+                        <div class="mb-4 flex items-center justify-between">
+                            <div>
+                                <p class="text-[10px] text-slate-500 uppercase tracking-widest">Threat Vector</p>
+                                <p class="text-sm font-semibold text-cyan-200">${(d.threat_type || threatType).toUpperCase()}</p>
+                            </div>
+                            <span class="px-2.5 py-1 rounded text-[10px] font-mono uppercase ${`sev-${d.severity || severity}`} shadow-sm">${d.severity || severity}</span>
+                        </div>
+                        <ol class="space-y-3">
+                            ${d.steps.slice(0, 3).map((s, i) => `
+                                <li class="p-3.5 rounded-lg bg-cyber-800/40 border border-slate-700/50 shadow-inner">
+                                    <div class="flex items-start gap-3">
+                                        <div class="w-6 h-6 rounded bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                                            <span class="text-purple-400 font-mono text-xs">${i+1}</span>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-200">${s.title || s.name || ("Step " + (i+1))}</p>
+                                            <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">${s.detail || s.description || ""}</p>
+                                        </div>
+                                    </div>
+                                </li>`).join("")}
+                        </ol>
+                        <p class="mt-4 text-[10px] text-slate-500 font-mono border-t border-slate-800 pt-2">Llama-3 (Ollama) · ${new Date().toLocaleTimeString()} · source: ${d.source || "llm"}</p>
+                    `;
                     panel.innerHTML = llmHtml;
                     setEngine("llm", "online");
                 } else {
@@ -974,12 +1017,18 @@
         if (placeholder) tbody.innerHTML = "";
         const hash = fakeHash(vector + Date.now() + Math.random());
         const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
-        const okish = (status || "").toLowerCase().match(/safe|ok|strong|verified/);
-        const color = okish ? "text-emerald-400" : "text-rose-400";
+        const okish = (status || "").toLowerCase().match(/safe|ok|strong|verified|authentic/);
+        const uncertain = (status || "").toLowerCase().includes("uncertain");
+        
+        let color = "text-rose-400";
+        if (okish) color = "text-emerald-400";
+        if (uncertain) color = "text-amber-400";
+        
         const saved = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
         saved.unshift({ ts, vector, hash, status, color });
         if (saved.length > 25) saved.length = 25;
         localStorage.setItem("sentinel_ledger", JSON.stringify(saved));
+        
         const newRow = document.createElement("tr");
         newRow.className = "border-b border-slate-800 row-flash";
         newRow.innerHTML = `
@@ -1098,29 +1147,34 @@
 
     function formatCopilotMessage(rawText) {
         if (!rawText) return "";
-        let text = rawText.replace(/\\r\\n/g, "\\n").trim();
-        text = text.replace(/^\\s*\\*\\*(Posture Summary|Critical Findings|Actionable Remediation[^\\n*]*)\\*\\*:?\\s*$/gim, "\\n\\n### $1\\n");
-        text = text.replace(/\\*\\*(Posture Summary|Critical Findings|Actionable Remediation[^\\n*]*)\\*\\*:?/gi, "\\n\\n### $1\\n");
-        text = text.replace(/^###\\s*(.*?)\\s*$/gim, '<h4 class=\"text-cyan-400 font-bold tracking-wide text-xs uppercase mt-4 mb-2 border-b border-cyan-500/20 pb-1\">$1</h4>');
-        text = text.replace(/\\*\\*(.*?)\\*\\*/g, '<strong class=\"text-slate-100 font-semibold\">$1</strong>');
-        text = text.replace(/^(\\d+)\\.\\s+(.*$)/gim, '<div class=\"flex items-start gap-2 ml-1 my-1.5 text-slate-300\"><span class=\"bg-cyan-500/20 text-cyan-300 text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 shrink-0 mt-0.5\">$1</span><span class=\"flex-1 leading-relaxed\">$2</span></div>');
-        text = text.replace(/^[-*]\\s+(.*$)/gim, '<div class=\"flex items-start gap-2 ml-1 my-1 text-slate-300\"><span class=\"text-cyan-400 leading-tight shrink-0\">•</span><span class=\"flex-1 leading-relaxed\">$1</span></div>');
-        let blocks = text.split(/\\n\\n+/);
+        let text = rawText.replace(/\r\n/g, "\n").trim();
+        text = text.replace(/^\s*\*\*(Posture Summary|Critical Findings|Actionable Remediation[^\n*]*)\*\*:?\s*$/gim, "\n\n### $1\n");
+        text = text.replace(/\*\*(Posture Summary|Critical Findings|Actionable Remediation[^\n*]*)\*\*:?/gi, "\n\n### $1\n");
+        text = text.replace(/^###\s*(.*?)\s*$/gim, '<h4 class="text-cyan-400 font-bold tracking-wide text-xs uppercase mt-4 mb-2 border-b border-cyan-500/20 pb-1">$1</h4>');
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-slate-100 font-semibold">$1</strong>');
+        text = text.replace(/^(\d+)\.\s+(.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1.5 text-slate-300"><span class="bg-cyan-500/20 text-cyan-300 text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 shadow-sm">$1</span><span class="flex-1 leading-relaxed">$2</span></div>');
+        text = text.replace(/^[-*]\s+(.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1 text-slate-300"><span class="text-cyan-400 leading-tight shrink-0">•</span><span class="flex-1 leading-relaxed">$1</span></div>');
+        let blocks = text.split(/\n\n+/);
         text = blocks.map(block => {
             let trimmed = block.trim();
             if (!trimmed) return "";
             if (trimmed.startsWith("<h4") || trimmed.startsWith("<div")) {
                 return trimmed;
             }
-            return `<p class=\"my-1.5 text-slate-300 leading-relaxed\">${trimmed}</p>`;
-        }).join("\\n");
+            return `<p class="my-1.5 text-slate-300 leading-relaxed">${trimmed}</p>`;
+        }).join("\n");
         return text;
     }
 
     function appendAiResponse(text) {
         const chatMessages = $("chatMessages");
         const aiHtml = `
-            <div class=\"flex gap-3\">\n                <div class=\"w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center shrink-0\">🤖</div>\n                <div class=\"bg-cyber-800 border border-slate-700 p-3 rounded-lg rounded-tl-none text-xs text-slate-300 leading-relaxed shadow-sm flex-1 overflow-hidden\">\n                    ${formatCopilotMessage(text)}\n                </div>\n            </div>`;
+            <div class="flex gap-3">
+                <div class="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center shrink-0">🤖</div>
+                <div class="bg-cyber-800 border border-slate-700 p-3 rounded-lg rounded-tl-none text-xs text-slate-300 leading-relaxed shadow-sm flex-1 overflow-hidden">
+                    ${formatCopilotMessage(text)}
+                </div>
+            </div>`;
         chatMessages.insertAdjacentHTML("beforeend", aiHtml);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
