@@ -11,17 +11,18 @@ from PIL import Image, ImageChops
 HF_API_TOKEN = os.getenv("HF_API_TOKEN", "") 
 HF_API_URL = "https://router.huggingface.co/hf-inference/models/prithivMLmods/Deep-Fake-Detector-v2-Model"
 
-class DoubleGateForensicEnsemble:
+class PriorityDecisionEnsemble:
     def __init__(self, image_path: str):
         self.image_path = image_path
         self.features = {}
         self.signs = []
         self.results = {}
 
-    def gate_1_authenticity_check(self, img: Image.Image):
-        """Gate 1: The Real Baseline (Metadata + Compression Noise Floor)"""
+    def extract_container_context(self, img: Image.Image):
+        """Step 1: Container Context (Metadata & Compression)"""
         exif = img.getexif()
-        has_native_metadata = bool(exif and (0x010f in exif or 0x0110 in exif))
+        metadata_present = bool(exif and (0x010f in exif or 0x0110 in exif))
+        self.features['metadata_present'] = metadata_present
         
         try:
             temp_io = io.BytesIO()
@@ -32,21 +33,16 @@ class DoubleGateForensicEnsemble:
         except Exception:
             ela_score = 0.0
 
-        if has_native_metadata and ela_score <= 8.0:
-            auth_tier = "Strongly Real"
-            self.signs.append("[GATE 1] Native camera EXIF and low compression detected. Establishing 'Strongly Real' baseline.")
-        elif not has_native_metadata and ela_score <= 12.0:
-            auth_tier = "Moderate Real"
-            self.signs.append("[GATE 1] Stripped metadata and moderate compression (WhatsApp/Social Media). Establishing 'Moderate Real' baseline.")
-        else:
-            auth_tier = "Low Real"
-            self.signs.append("[GATE 1] High compression variance or screenshot detected. Authenticity baseline lowered.")
-            
-        self.features['auth_tier'] = auth_tier
-        self.features['is_screenshot'] = (auth_tier != "Strongly Real")
+        # Compression is confirmed if native EXIF is stripped or Error Level Analysis shows high variance
+        compression_detected = not metadata_present or ela_score > 8.0
+        self.features['compression_detected'] = compression_detected
+        
+        meta_str = "Present" if metadata_present else "Missing/Stripped"
+        comp_str = "Detected" if compression_detected else "Not Detected"
+        self.signs.append(f"Context Extraction: Metadata: {meta_str} | Compression: {comp_str}")
 
-    def gate_2_synthetic_check(self, cv_img: np.ndarray, image_bytes: bytes) -> float:
-        """Gate 2: The AI Baseline (Spectral FFT + CNN)"""
+    def extract_synthetic_markers(self, cv_img: np.ndarray, image_bytes: bytes) -> float:
+        """Step 2 & 3: Spectral Math & Neural Opinion Fusion"""
         
         # --- Spectral FFT (Pixel-Level Artifacts) ---
         gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
@@ -63,8 +59,7 @@ class DoubleGateForensicEnsemble:
         
         spike_density = float((spikes / (w * h)) * 10000.0)
         fft_threat = max(0.0, min(100.0, spike_density * 9.0))
-        self.features['fft_threat'] = fft_threat
-        self.signs.append(f"[GATE 2] Spectral FFT calculated a {round(fft_threat, 1)}% structural synthetic threat.")
+        self.signs.append(f"Spectral Math: FFT calculated a {round(fft_threat, 1)}% synthetic threat.")
 
         # --- Neural Opinion (CNN) ---
         cnn_score = 0.0
@@ -80,75 +75,57 @@ class DoubleGateForensicEnsemble:
                             label = str(entry.get("label", "")).lower()
                             if "fake" in label or "artificial" in label:
                                 cnn_score = float(entry.get("score", 0.0)) * 100.0
-                                self.signs.append(f"[GATE 2] Vision Transformer detected {round(cnn_score, 1)}% synthetic markers.")
+                                self.signs.append(f"Neural Model: Vision Transformer detected {round(cnn_score, 1)}% synthetic markers.")
                                 break
             except Exception:
-                self.signs.append("[GATE 2] Neural API timeout.")
+                self.signs.append("Neural Model: API timeout.")
         
-        self.features['cnn_threat'] = cnn_score
-        
-        # Formulate Gate 2 synthetic score (Semantic CNN backed by Pixel-Level FFT)
+        # Calculate unified Synthetic Score
         synthetic_score = (cnn_score * 0.75) + (fft_threat * 0.25)
         self.features['synthetic_score'] = synthetic_score
         return synthetic_score
 
-    def evaluate_intersection(self):
-        """The Decision Layer: Intersection Logic (Double-Key Lock)"""
-        auth_tier = self.features['auth_tier']
-        synthetic_score = self.features['synthetic_score']
-        is_screenshot = self.features['is_screenshot']
+    def execute_decision_tree(self):
+        """Step 4: Priority-Based Decision Tree Logic"""
+        synthetic_score = float(self.features['synthetic_score'])
+        metadata_present = bool(self.features['metadata_present'])
+        compression_detected = bool(self.features['compression_detected'])
         
-        # --- THE DOUBLE-KEY LOCK IMPLEMENTATION ---
-        if auth_tier == "Strongly Real":
-            if synthetic_score > 98.0:
-                final_score = synthetic_score
-                verdict = "FAKE"
-                reason_text = "Gate 1 established Strong Authenticity, but Gate 2 provided absolute (98%+) synthetic proof. Overriding to FAKE."
-            else:
-                final_score = min(synthetic_score, 35.0)  # Suppress hallucination
-                verdict = "REAL"
-                reason_text = "Gate 1 verified Strong Authenticity. Gate 2 synthetic signals rejected as environmental noise."
+        # --- RULE 1: The Synthetic Override ---
+        if synthetic_score > 85.0:
+            verdict = "FAKE"
+            final_score = max(synthetic_score, 86.0)
+            reason_text = "Synthetic Override: Score exceeds 85% absolute synthetic threshold."
+            
+        # --- RULE 2: The Real Confidence Rule ---
+        elif synthetic_score < 60.0 and metadata_present:
+            verdict = "REAL"
+            final_score = min(synthetic_score, 40.0)
+            reason_text = "Real Confidence Rule: Native metadata verified and synthetic markers are low."
+            
+        # --- RULE 3: The Compression Gray Zone ---
+        elif 60.0 <= synthetic_score <= 85.0 and compression_detected:
+            verdict = "UNCERTAIN"
+            final_score = 65.0  # Lock at the threshold of uncertainty
+            reason_text = "Compression Gray Zone: Moderate synthetic signals masked by compression artifacts."
+            
+        # --- RULE 4: Default Safety ---
+        else:
+            verdict = "REAL"
+            final_score = min(synthetic_score, 49.0)
+            reason_text = "Default Safety: Ambiguous state defaults to authentic to prevent False Positives."
 
-        elif auth_tier == "Moderate Real":  # The WhatsApp Profile
-            if synthetic_score > 95.0:
-                final_score = synthetic_score
-                verdict = "FAKE"
-                reason_text = "WhatsApp/Compressed image detected. Gate 2 provided overwhelming (>95%) synthetic proof. FAKE confirmed."
-            elif synthetic_score > 75.0:
-                final_score = 65.0  # Push to UNCERTAIN zone
-                verdict = "UNCERTAIN"
-                reason_text = "WhatsApp/Compressed image detected. Gate 2 is highly suspicious but lacks absolute certainty. Marking UNCERTAIN."
-            else:
-                final_score = min(synthetic_score, 45.0)
-                verdict = "REAL"
-                reason_text = "WhatsApp/Compressed image detected. Gate 2 lacks extreme certainty. Forcing REAL classification to prevent CNN hallucination."
-
-        else:  # Low Real (Screenshots / Aggressive compression)
-            if synthetic_score > 90.0:
-                final_score = synthetic_score
-                verdict = "FAKE"
-                reason_text = "Low authenticity container. Gate 2 synthetic signals exceeded 90%. FAKE confirmed."
-            elif synthetic_score > 60.0:
-                final_score = 70.0
-                verdict = "UNCERTAIN"
-                reason_text = "Low authenticity container with moderate-high AI flags. Marking UNCERTAIN."
-            else:
-                final_score = min(synthetic_score, 49.0)
-                verdict = "REAL"
-                reason_text = "Low authenticity container, but Gate 2 lacks sufficient synthetic evidence. Defaulting to REAL."
-
-        self.signs.append(f"[DECISION LAYER] {reason_text}")
-        
+        self.signs.append(f"Decision Tree: {reason_text}")
         is_fake = (verdict == "FAKE")
         
         # UI Classification Mapping
-        if is_screenshot and verdict == "FAKE":
+        if compression_detected and verdict == "FAKE":
             classification = "4_AI_Screenshot"
             desc = "Screenshot / Compressed AI-generated media"
-        elif is_screenshot and verdict == "REAL":
+        elif compression_detected and verdict == "REAL":
             classification = "2_Real_Screenshot"
             desc = "Screenshot / Compressed authentic photograph"
-        elif verdict == "FAKE" and not is_screenshot:
+        elif verdict == "FAKE" and not compression_detected:
             classification = "3_AI_Native"
             desc = "Direct AI-generated diffusion/GAN media"
         elif verdict == "UNCERTAIN":
@@ -158,7 +135,7 @@ class DoubleGateForensicEnsemble:
             classification = "1_Real_Native"
             desc = "Authentic camera photograph"
 
-        return classification, desc, final_score, f"[{classification.upper()}] Intersection Verdict: {reason_text}", is_fake
+        return classification, desc, final_score, f"[{classification.upper()}] Decision Tree Verdict: {reason_text}", is_fake
 
 # ==========================================
 # MAIN ANALYSIS ENDPOINT
@@ -169,44 +146,37 @@ def analyze_image(image_path: str) -> dict:
             img = orig_img.convert('RGB')
             cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             
-            # Send clean, unmanipulated pixels to ViT to preserve diffusion noise
             cnn_pil = img.copy()
             cnn_pil.thumbnail((1024, 1024))
             buf = io.BytesIO()
             cnn_pil.save(buf, format="JPEG", quality=85)
             cnn_image_bytes = buf.getvalue()
 
-        ensemble = DoubleGateForensicEnsemble(image_path)
+        ensemble = PriorityDecisionEnsemble(image_path)
         
-        # Execute Gate 1
-        ensemble.gate_1_authenticity_check(img)
-        
-        # Execute Gate 2
-        ensemble.gate_2_synthetic_check(cv_img, cnn_image_bytes)
+        ensemble.extract_container_context(img)
+        ensemble.extract_synthetic_markers(cv_img, cnn_image_bytes)
         
         del cv_img
         gc.collect()
 
-        # Execute Intersection Logic
-        classification, desc, fused_score, reason, is_fake = ensemble.evaluate_intersection()
+        classification, desc, final_score, reason, is_fake = ensemble.execute_decision_tree()
 
         return {
             "error": False,
             "classification": classification,
             "description": desc,
             "is_fake": bool(is_fake),
-            "fake_confidence": float(round(fused_score, 2)),
-            "real_confidence": float(round(100.0 - fused_score, 2)),
+            "fake_confidence": float(round(final_score, 2)),
+            "real_confidence": float(round(100.0 - final_score, 2)),
             "reason": str(reason),
             "signs": ensemble.signs,
             "detailed_analysis": {
-                "auth_tier": ensemble.features.get("auth_tier", "Unknown"),
-                "synthetic_score": float(round(ensemble.features.get("synthetic_score", 0.0), 2)),
-                "cnn_threat": float(round(ensemble.features.get("cnn_threat", 0.0), 2)),
-                "fft_threat": float(round(ensemble.features.get("fft_threat", 0.0), 2)),
-                "is_screenshot": bool(ensemble.features.get("is_screenshot", False))
+                "metadata_present": ensemble.features.get("metadata_present", False),
+                "compression_detected": ensemble.features.get("compression_detected", False),
+                "synthetic_score": float(round(ensemble.features.get("synthetic_score", 0.0), 2))
             },
-            "analyzed_via": "Sentinel X Double-Gate Intersection Matrix"
+            "analyzed_via": "Sentinel X Priority-Based Decision Tree"
         }
 
     except Exception as e:
