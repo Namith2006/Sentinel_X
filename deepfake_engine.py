@@ -59,7 +59,6 @@ class AdaptiveForensicEnsemble:
         lap_quarter = cv2.Laplacian(gray_quarter, cv2.CV_64F).var()
         
         scale_variance = float(np.std([lap_1x, lap_half, lap_quarter]))
-        # Added a 5.0% floor to prevent absolute zero drag
         multi_scale_threat = max(5.0, min(100.0, (250.0 - scale_variance) / 2.0))
         
         # 2. Edge Density & Coherence 
@@ -68,7 +67,6 @@ class AdaptiveForensicEnsemble:
         sobel_mag = np.sqrt(sobelx**2 + sobely**2)
         
         edge_density = float(np.sum(sobel_mag > 30) / (h * w))
-        # Softened the multiplier and added a 5.0% floor
         edge_threat = max(5.0, min(100.0, (0.15 - edge_density) * 800.0))
         
         # 3. Frequency Domain Fingerprinting (FFT Spikes)
@@ -114,30 +112,28 @@ class AdaptiveForensicEnsemble:
         return self.features.get('math_threat', 0.0)
 
     def fuse_and_classify(self, cnn_threat):
-        """Step 4: AI-Dominant Dynamic Weighting"""
+        """Step 4: Balanced Cross-Verification Matrix"""
         math_threat = float(self.features['math_threat'])
         quality = self.features.get('image_quality', 'Medium')
         is_screenshot = self.features.get('is_screenshot', False)
 
-        # AI-heavy Confidence Matrix
+        # 1. Balanced Confidence Matrix (Reduced AI dominance)
         if quality == "High":
-            ai_w, math_w = 0.90, 0.10
+            ai_w, math_w = 0.70, 0.30
         elif quality == "Medium":
-            ai_w, math_w = 0.80, 0.20  # Shifted from 60/40 to prevent math drag
-        else: 
-            ai_w, math_w = 0.60, 0.40  # Boosted AI influence on low quality
+            ai_w, math_w = 0.60, 0.40
+        else:
+            ai_w, math_w = 0.50, 0.50
 
         fused_score = (cnn_threat * ai_w) + (math_threat * math_w)
-        self.signs.append(f"Confidence Matrix: AI ({int(ai_w*100)}%) / Math ({int(math_w*100)}%).")
+        self.signs.append(f"Balanced Matrix: AI ({int(ai_w*100)}%) / Math ({int(math_w*100)}%).")
 
-        # CNN Override: Force a fake classification if the AI is highly confident, ignoring math vetoes
-        if cnn_threat > 70.0 and fused_score < 50.0:
-            self.signs.append(f"CNN Override: AI confidence ({round(cnn_threat, 1)}%) exceeds 70%. Bypassing math drag and enforcing 51.0% floor.")
-            fused_score = 51.0
+        # 2. THE MATH VETO
+        if math_threat < 25.0:
+            self.signs.append(f"Math Veto: Physical signals ({round(math_threat, 1)}%) are too low for a deepfake. Reducing final probability.")
+            fused_score = fused_score * 0.6
 
         fused_score = max(0.0, min(100.0, fused_score))
-        
-        # Strict Binary Threshold (Removed the Uncertain tier)
         is_fake = bool(fused_score >= 50.0)
 
         # 4-Class Classification Mapping
@@ -154,7 +150,7 @@ class AdaptiveForensicEnsemble:
             classification = "1_Real_Native"
             desc = "Authentic camera photograph"
             
-        reason = f"[{classification.upper()}] AI-Dominant Fusion: CNN ({round(cnn_threat, 1)}%) fused with Math ({round(math_threat, 1)}%) under {quality.upper()} matrix. Final probability: {round(fused_score, 1)}%."
+        reason = f"[{classification.upper()}] Balanced Fusion: CNN ({round(cnn_threat, 1)}%) fused with Math ({round(math_threat, 1)}%) under {quality.upper()} matrix. Final probability: {round(fused_score, 1)}%."
             
         return classification, desc, fused_score, reason
 
@@ -195,7 +191,7 @@ def analyze_image(image_path: str) -> dict:
             "reason": str(reason),
             "signs": ensemble.signs,
             "detailed_analysis": ensemble.features,
-            "analyzed_via": "Sentinel X AI-Dominant Matrix"
+            "analyzed_via": "Sentinel X Balanced Cross-Verification Matrix"
         }
 
     except Exception as e:
