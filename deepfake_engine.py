@@ -53,7 +53,7 @@ class QuadGateForensicSuite:
 
         if self.has_metadata and ela_score <= 8.0:
             self.auth_tier = "Strong"
-            self.container_log = "PASS (Native EXIF Verified)"
+            self.container_log = "PASS (Native EXIF Verified / Minimal Variance)"
         elif not self.has_metadata and ela_score <= 12.0:
             self.auth_tier = "Moderate"
             self.container_log = "WARNING (WhatsApp / Social Media Compression)"
@@ -97,9 +97,9 @@ class QuadGateForensicSuite:
             self.features['signal_score'] = self.signal_score
             
             if self.signal_score > 60.0:
-                self.signal_log = f"FAIL (Synthetic Checkerboard/Over-smoothing detected - {round(self.signal_score,1)}%)"
+                self.signal_log = f"FAIL (Synthetic Checkerboard/Over-smoothing detected: {round(self.signal_score,1)}%)"
             else:
-                self.signal_log = f"PASS (Organic optical noise floor intact - {round(self.signal_score,1)}%)"
+                self.signal_log = f"PASS (Organic optical noise floor intact: {round(self.signal_score,1)}%)"
                 
         finally:
             del gray
@@ -127,7 +127,7 @@ class QuadGateForensicSuite:
                         if "fake" in label or "artificial" in label:
                             self.neural_score = float(entry.get("score", 0.0)) * 100.0
                             status = "FAIL (High probability of semantic anomalies)" if self.neural_score > 60 else "PASS (Clean)"
-                            self.neural_log = f"{status} - Confidence {round(self.neural_score,1)}%"
+                            self.neural_log = f"{status} -> {round(self.neural_score,1)}%"
                             return
             else:
                 self.neural_score = self.signal_score
@@ -139,25 +139,22 @@ class QuadGateForensicSuite:
             return
             
         self.neural_score = 0.0
-        self.neural_log = "PASS (No synthetic markers found) - Confidence 0.0%"
+        self.neural_log = "PASS (No synthetic markers found) -> 0.0%"
 
     def gate_4_biological(self, cv_img: np.ndarray):
         """GATE 4: The Biological Layer (LAB/Sobel) - Surgical 50% ROI Crop"""
         try:
             h, w = cv_img.shape[:2]
             
-            # ROI Crop: Center 50% reduces memory footprint by 75%
             start_y, end_y = h // 4, 3 * h // 4
             start_x, end_x = w // 4, 3 * w // 4
             roi = cv_img[start_y:end_y, start_x:end_x]
             
-            # LAB Variance (Skin Smoothness)
             lab = cv2.cvtColor(roi, cv2.COLOR_BGR2LAB)
             l_channel = lab[:, :, 0].astype(np.float32)
             
             lab_var = float(np.var(l_channel))
             
-            # Sobel Noise Floor (Detecting unnaturally smooth gradients)
             sobelx = cv2.Sobel(l_channel, cv2.CV_32F, 1, 0, ksize=3)
             sobely = cv2.Sobel(l_channel, cv2.CV_32F, 0, 1, ksize=3)
             sobel_mag = np.sqrt(sobelx**2 + sobely**2)
@@ -169,9 +166,9 @@ class QuadGateForensicSuite:
             self.bio_score = (smoothness_threat + gradient_threat) / 2.0
             
             if self.bio_score > 60.0:
-                self.bio_log = f"FAIL (LAB Variance Low: Plastic Skin / Synthetic Texture - {round(self.bio_score,1)}%)"
+                self.bio_log = f"FAIL (Plastic Skin / Synthetic Texture: {round(self.bio_score,1)}%)"
             else:
-                self.bio_log = f"PASS (Organic Micro-Texture Verified - {round(self.bio_score,1)}%)"
+                self.bio_log = f"PASS (Organic Micro-Texture Verified: {round(self.bio_score,1)}%)"
                 
         finally:
             if 'roi' in locals(): del roi
@@ -183,36 +180,42 @@ class QuadGateForensicSuite:
             gc.collect()
 
     def execute_grand_jury(self):
-        """THE GRAND JURY: Intersection Logic & Forensic Audit Reporting"""
+        """THE GRAND JURY: Hierarchical Expert System (Priority Fall-through Logic)"""
         is_compressed = self.features.get('is_compressed', False)
         
-        # Base Matrix
-        fused_score = (self.neural_score * 0.5) + (self.signal_score * 0.25) + (self.bio_score * 0.25)
-        logic_applied = "Standard Fusion Matrix"
-
-        # 1. The "Smoking Gun" Rule (Absolute Fake)
-        if self.neural_score > 90.0 and self.signal_score > 90.0:
-            fused_score = max(fused_score, 95.0)
-            logic_applied = "Smoking Gun Rule (Neural > 90% AND Signal > 90%) -> Forced FAKE"
+        # --- PRIORITY 1: Absolute Fake (The Smoking Gun) ---
+        if self.neural_score > 95.0 or self.signal_score > 95.0:
+            fused_score = max(self.neural_score, self.signal_score, 96.0)
+            logic_applied = "Priority 1 Override (Absolute Fake): Extreme synthetic markers detected."
             
-        # 2. The "Compression Offset" Rule (Saves WhatsApp Selfies)
-        elif is_compressed and self.neural_score < 85.0:
-            fused_score = max(0.0, fused_score - 20.0)
-            logic_applied = "Compression Offset (Moderate/Low Container AND Neural < 85%) -> Reduced 20%"
-
-        # 3. The "Authenticity Veto" Rule (Saves Native Selfies)
-        elif self.auth_tier == "Strong" and self.signal_score < 30.0:
-            fused_score = min(fused_score, 35.0)
-            logic_applied = "Authenticity Veto (Strong Container AND Low Signal) -> Forced REAL"
+        # --- PRIORITY 2: Collaborative Fake ---
+        elif self.neural_score > 70.0 and self.signal_score > 70.0:
+            fused_score = max(self.neural_score, self.signal_score, 85.0)
+            logic_applied = "Priority 2 Override (Collaborative Fake): Neural and Signal anomalies corroborate."
+            
+        # --- PRIORITY 3: Absolute Real (Safe Harbor) ---
+        elif self.auth_tier == "Strong" and self.signal_score < 25.0:
+            fused_score = min(self.neural_score, 20.0)
+            logic_applied = "Priority 3 Override (Absolute Real): Native EXIF and clean signal bypass AI hallucination."
+            
+        # --- PRIORITY 4: Base Fusion ---
+        else:
+            fused_score = (self.neural_score * 0.45) + (self.signal_score * 0.35) + (self.bio_score * 0.20)
+            logic_applied = "Priority 4 (Base Fusion): Standard weighted matrix."
+            
+            # --- PRIORITY 5: Conditional Compression Offset ---
+            if is_compressed and 40.0 <= fused_score <= 75.0:
+                fused_score = max(0.0, fused_score - 15.0)
+                logic_applied = "Priority 5 (Conditional Offset): Mitigating compression noise in borderline media."
 
         fused_score = max(0.0, min(100.0, float(fused_score)))
 
-        # 4. The "Uncertainty Zone" & Verdict Assignment
+        # --- VERDICT ASSIGNMENT ---
         if fused_score > 75.0:
             verdict = "🚨 DEEPFAKE DETECTED"
             class_code = "4_AI_Screenshot" if is_compressed else "3_AI_Native"
             desc = "Confirmed Deepfake / Synthetic Media"
-        elif fused_score >= 55.0:
+        elif fused_score >= 50.0:
             verdict = "⚠️ UNCERTAIN"
             class_code = "5_Uncertain"
             desc = "Inconclusive / Heavy Compression Artifacts"
@@ -247,12 +250,10 @@ def analyze_image(image_path: str) -> dict:
             # Gate 1
             ensemble.gate_1_container(img)
             
-            # Pre-allocate for OpenCV operations
             raw_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             cv_img = ensemble._resize_inter_area(raw_cv)
             del raw_cv
             
-            # Compress strict bytes for HF API
             buf = io.BytesIO()
             img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
             img.save(buf, format="JPEG", quality=85)
@@ -283,7 +284,7 @@ def analyze_image(image_path: str) -> dict:
                 "bio_score": float(round(ensemble.bio_score, 2)),
                 "fused_score": float(round(fused_score, 2))
             },
-            "analyzed_via": "Sentinel X Quad-Gate Digital Forensic Suite"
+            "analyzed_via": "Sentinel X Hierarchical Expert System"
         }
 
     except Exception as e:
