@@ -688,11 +688,17 @@
         setGauge(currentScore);
     }
 
-    function showApiError(box, inputId, extraId, label) {
+  function showApiError(box, inputId, extraId, label, errMsg = null) {
         const closeBtn = `<button type="button" onclick="closeResult('${box.id}', '${inputId}', '${extraId}')" class="absolute top-2 right-2 p-1 text-slate-400 hover:text-white transition leading-none" title="Clear Result">✖</button>`;
         box.classList.remove("hidden");
         box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
-        box.innerHTML = closeBtn + `❌ <strong>API CONNECTION FAILED</strong><br><span class="text-xs text-rose-300/80">The ${label} engine is currently unreachable. Check server logs.</span>`;
+        
+        let displayMsg = `The ${label} engine is currently unreachable. Check server logs.`;
+        if (errMsg) {
+            displayMsg = `Server Response: <span class="text-rose-400 font-bold">${errMsg}</span>`;
+        }
+        
+        box.innerHTML = closeBtn + `❌ <strong>API CONNECTION FAILED</strong><br><span class="text-xs text-rose-300/80">${displayMsg}</span>`;
     }
 
     async function scanUrl() {
