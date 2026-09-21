@@ -34,7 +34,6 @@ class AdaptiveForensicEnsemble:
         is_screenshot = not has_metadata or ela_score > 8.0
         self.features['is_screenshot'] = is_screenshot
 
-        # Establish Quality Tier for the Confidence Matrix
         if is_screenshot and ela_score > 12.0:
             quality = "Low"
             self.signs.append("Quality Estimator: LOW (Aggressive compression/Screenshot detected).")
@@ -48,11 +47,11 @@ class AdaptiveForensicEnsemble:
         self.features['image_quality'] = quality
 
     def calculate_math_threat(self, cv_img):
-        """Step 2: Adaptive Signal Processing (Pyramids, Edge Density, Spectral Spikes)"""
+        """Step 2: Adaptive Signal Processing (With Baseline Floors)"""
         gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
         h, w = gray.shape
         
-        # 1. Multi-Scale Analysis (Pyramid Processing)
+        # 1. Multi-Scale Analysis
         lap_1x = cv2.Laplacian(gray, cv2.CV_64F).var()
         gray_half = cv2.resize(gray, (w // 2, h // 2))
         lap_half = cv2.Laplacian(gray_half, cv2.CV_64F).var()
@@ -60,16 +59,17 @@ class AdaptiveForensicEnsemble:
         lap_quarter = cv2.Laplacian(gray_quarter, cv2.CV_64F).var()
         
         scale_variance = float(np.std([lap_1x, lap_half, lap_quarter]))
-        multi_scale_threat = max(0.0, min(100.0, (200.0 - scale_variance) / 2.0))
+        # Added a 5.0% floor to prevent absolute zero drag
+        multi_scale_threat = max(5.0, min(100.0, (250.0 - scale_variance) / 2.0))
         
-        # 2. Edge Density & Coherence (Replacing Basic Variance)
-        # Deepfakes often lack organic high-frequency micro-edges (sensor grain) and exhibit unnaturally smooth transitions.
+        # 2. Edge Density & Coherence 
         sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
         sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
         sobel_mag = np.sqrt(sobelx**2 + sobely**2)
         
         edge_density = float(np.sum(sobel_mag > 30) / (h * w))
-        edge_threat = max(0.0, min(100.0, (0.10 - edge_density) * 1000.0))
+        # Softened the multiplier and added a 5.0% floor
+        edge_threat = max(5.0, min(100.0, (0.15 - edge_density) * 800.0))
         
         # 3. Frequency Domain Fingerprinting (FFT Spikes)
         f = np.fft.fft2(gray)
@@ -82,9 +82,8 @@ class AdaptiveForensicEnsemble:
         spikes = np.sum(mag > spike_threshold)
         
         spike_density = (spikes / (w * h)) * 10000.0
-        fft_threat = max(0.0, min(100.0, spike_density * 15.0))
+        fft_threat = max(5.0, min(100.0, spike_density * 15.0))
         
-        # Aggregate the adaptive metrics
         math_threat = float((multi_scale_threat + edge_threat + fft_threat) / 3.0)
         self.features['math_threat'] = math_threat
         self.signs.append(f"Adaptive Math: Pyramid ({round(multi_scale_threat,1)}%), Edge Density ({round(edge_threat,1)}%), Spectral Spikes ({round(fft_threat,1)}%) -> Threat: {round(math_threat, 1)}%")
@@ -115,58 +114,49 @@ class AdaptiveForensicEnsemble:
         return self.features.get('math_threat', 0.0)
 
     def fuse_and_classify(self, cnn_threat):
-        """Step 4: Dynamic Weighting & Three-Tier Thresholds"""
+        """Step 4: AI-Dominant Dynamic Weighting"""
         math_threat = float(self.features['math_threat'])
         quality = self.features.get('image_quality', 'Medium')
         is_screenshot = self.features.get('is_screenshot', False)
 
-        # The Confidence Matrix Implementation
+        # AI-heavy Confidence Matrix
         if quality == "High":
-            ai_w, math_w, veto_power = 0.90, 0.10, "Low"
+            ai_w, math_w = 0.90, 0.10
         elif quality == "Medium":
-            ai_w, math_w, veto_power = 0.60, 0.40, "Medium"
-        else: # Low (Screenshot/Aggressive Compression)
-            ai_w, math_w, veto_power = 0.40, 0.60, "High"
+            ai_w, math_w = 0.80, 0.20  # Shifted from 60/40 to prevent math drag
+        else: 
+            ai_w, math_w = 0.60, 0.40  # Boosted AI influence on low quality
 
         fused_score = (cnn_threat * ai_w) + (math_threat * math_w)
-        self.signs.append(f"Confidence Matrix: AI ({int(ai_w*100)}%) / Math ({int(math_w*100)}%). Veto Power: {veto_power}.")
+        self.signs.append(f"Confidence Matrix: AI ({int(ai_w*100)}%) / Math ({int(math_w*100)}%).")
 
-        # Soft Penalty Shift (Replacing the Hard Cap)
-        if veto_power == "High" and math_threat < 40.0:
-            penalty = 15.0
-            fused_score = max(0.0, fused_score - penalty)
-            self.signs.append(f"High Veto Power Enforced: Math threat ({round(math_threat,1)}%) leans authentic. Soft penalty of -{penalty}% applied to CNN.")
-        elif veto_power == "Medium" and math_threat < 25.0:
-            penalty = 10.0
-            fused_score = max(0.0, fused_score - penalty)
-            self.signs.append(f"Medium Veto Power Enforced: Math lacks synthesis markers. Soft penalty of -{penalty}% applied to CNN.")
+        # CNN Override: Force a fake classification if the AI is highly confident, ignoring math vetoes
+        if cnn_threat > 70.0 and fused_score < 50.0:
+            self.signs.append(f"CNN Override: AI confidence ({round(cnn_threat, 1)}%) exceeds 70%. Bypassing math drag and enforcing 51.0% floor.")
+            fused_score = 51.0
 
         fused_score = max(0.0, min(100.0, fused_score))
+        
+        # Strict Binary Threshold (Removed the Uncertain tier)
+        is_fake = bool(fused_score >= 50.0)
 
-        # Three-Tier Classification Mapping
-        if fused_score > 60.0:
-            tier = "FAKE"
-            is_fake = True
-        elif fused_score >= 40.0:
-            tier = "UNCERTAIN"
-            is_fake = False
+        # 4-Class Classification Mapping
+        if is_screenshot and is_fake:
+            classification = "4_AI_Screenshot"
+            desc = "Screenshot / Compressed AI-generated image"
+        elif is_screenshot and not is_fake:
+            classification = "2_Real_Screenshot"
+            desc = "Screenshot / Compressed authentic photograph"
+        elif is_fake and not is_screenshot:
+            classification = "3_AI_Native"
+            desc = "Direct AI-generated media"
         else:
-            tier = "REAL"
-            is_fake = False
-
-        if is_screenshot:
-            if tier == "FAKE": desc = "Screenshot / Compressed AI-generated image"
-            elif tier == "UNCERTAIN": desc = "Screenshot / Inconclusive forensic markers"
-            else: desc = "Screenshot / Compressed authentic photograph"
-        else:
-            if tier == "FAKE": desc = "Direct AI-generated media"
-            elif tier == "UNCERTAIN": desc = "Native Image / Inconclusive forensic markers"
-            else: desc = "Authentic camera photograph"
+            classification = "1_Real_Native"
+            desc = "Authentic camera photograph"
             
-        classification = f"{tier}_{'SCREENSHOT' if is_screenshot else 'NATIVE'}"
-        reason = f"[{classification}] Adaptive Fusion: CNN ({round(cnn_threat, 1)}%) fused with Math ({round(math_threat, 1)}%) under {quality.upper()} quality matrix. Final probability: {round(fused_score, 1)}%."
+        reason = f"[{classification.upper()}] AI-Dominant Fusion: CNN ({round(cnn_threat, 1)}%) fused with Math ({round(math_threat, 1)}%) under {quality.upper()} matrix. Final probability: {round(fused_score, 1)}%."
             
-        return classification, desc, fused_score, reason, is_fake
+        return classification, desc, fused_score, reason
 
 # ==========================================
 # 🚀 MAIN ANALYSIS ENDPOINT
@@ -178,7 +168,6 @@ def analyze_image(image_path: str) -> dict:
             cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             
             # --- PRE-PROCESSING: CNN Input (Raw/Unaltered) ---
-            # Send the unmodified pixel matrix to preserve GAN/diffusion artifacts
             cnn_pil = img.copy()
             cnn_pil.thumbnail((1024, 1024))
             buf = io.BytesIO()
@@ -194,19 +183,19 @@ def analyze_image(image_path: str) -> dict:
         gc.collect()
 
         cnn_threat = ensemble.query_cnn_threat(cnn_image_bytes)
-        classification, desc, fused_score, reason, is_fake = ensemble.fuse_and_classify(cnn_threat)
+        classification, desc, fused_score, reason = ensemble.fuse_and_classify(cnn_threat)
 
         return {
             "error": False,
             "classification": classification,
             "description": desc,
-            "is_fake": is_fake,
+            "is_fake": bool(fused_score >= 50.0),
             "fake_confidence": float(fused_score),
             "real_confidence": float(100.0 - fused_score),
             "reason": str(reason),
             "signs": ensemble.signs,
             "detailed_analysis": ensemble.features,
-            "analyzed_via": "Sentinel X Adaptive Forensics Matrix"
+            "analyzed_via": "Sentinel X AI-Dominant Matrix"
         }
 
     except Exception as e:
