@@ -127,47 +127,47 @@ class MultiPillarForensicEnsemble:
         return float(self.features.get('math_threat', 0.0))
 
     def fuse_and_classify(self, cnn_threat: float):
-        """Step 5: Multi-Pillar Forensic Fusion with Corroborated Smoking Gun Gates"""
+        """Step 5: Compression-Aware Forensic Fusion"""
         math_threat = float(self.features['math_threat'])
-        fft_threat = float(self.features.get('fft_threat', 0.0))
         quality = str(self.features.get('image_quality', 'Medium'))
         is_screenshot = bool(self.features.get('is_screenshot', False))
         has_metadata = bool(self.features.get('has_native_metadata', False))
 
-        # Base Matrix Weighting
-        if quality == "High":
-            ai_w, math_w = 0.65, 0.35
-        elif quality == "Medium":
-            ai_w, math_w = 0.55, 0.45
-        else:
-            ai_w, math_w = 0.45, 0.55
+        # --- THE COMPRESSION OFFSET (The Fix for WhatsApp Images) ---
+        compression_offset = 0.0
+        if quality == "Medium":
+            compression_offset = 15.0
+        elif quality == "Low":
+            compression_offset = 25.0
 
-        fused_score = (cnn_threat * ai_w) + (math_threat * math_w)
+        adjusted_cnn = max(0.0, cnn_threat - compression_offset)
+        adjusted_math = max(0.0, math_threat - compression_offset)
+        
+        if compression_offset > 0:
+            self.signs.append(f"Compression Filter: Offset of -{compression_offset}% applied to mitigate synthetic hallucinations.")
 
-        # 1. Native Camera Whitelist Bias
+        # 1. Balanced Weights
+        ai_w, math_w = 0.60, 0.40
+        fused_score = (adjusted_cnn * ai_w) + (adjusted_math * math_w)
+
+        # 2. Native Camera Whitelist Bias
         if has_metadata and not is_screenshot:
-            self.signs.append("Forensic Override: Native camera EXIF verified. Applying authenticity bias (-50%).")
+            self.signs.append("Forensic Whitelist: Native camera metadata detected. Applying authenticity bias (-50%).")
             fused_score *= 0.5
 
-        # 2. Hard Math Anchor for Clean Low Noise
-        if math_threat < 20.0 and not (cnn_threat > 95.0 and fft_threat > 50.0):
-            anchor_cap = math_threat + 15.0
-            if fused_score > anchor_cap:
-                self.signs.append(f"Physical Anchor: Ambient noise floor confirms organic sensor. Suppressing AI hallucination to {round(anchor_cap, 1)}%.")
-                fused_score = anchor_cap
+        # 3. The "Real-World" Veto
+        if adjusted_math < 20.0:
+            self.signs.append(f"Compression Filter: Spectral spikes attributed to JPEG compression rather than AI. Vetoing threat.")
+            fused_score = min(fused_score, adjusted_math + 20.0)
 
-        # 3. The "Smoking Gun" Trigger: Multi-Pillar Corroboration
-        # If AI confidence is high and spectral math confirms generative artifacts, force fake verdict
+        # 4. The "Smoking Gun" Logic
         if cnn_threat > 80.0 and math_threat > 30.0:
-            fused_score = max(fused_score, 78.5)
-            self.signs.append("Forensic Trigger: High AI confidence (>80%) corroborated by anomalous spectral/spatial math (>30%) confirms synthetic signature.")
-        elif fft_threat > 75.0 and cnn_threat > 60.0:
-            fused_score = max(fused_score, 76.0)
-            self.signs.append("Forensic Trigger: Pronounced periodic FFT lattice artifacts corroborating neural classification.")
+            fused_score = max(fused_score, 75.0)
+            self.signs.append("Forensic Trigger: High raw AI confidence combined with spatial anomalies creates a 'Smoking Gun' signature.")
 
         fused_score = max(0.0, min(100.0, float(fused_score)))
         
-        # Professional Conservative Threshold (60.0% to prioritize high precision)
+        # Professional Threshold
         is_fake = bool(fused_score >= 60.0)
 
         # Forensic Tier Categorization
@@ -194,8 +194,8 @@ class MultiPillarForensicEnsemble:
             desc = "Authentic camera photograph"
             
         reason = (
-            f"[{verdict_label}] Multi-Pillar Verdict: CNN ({round(cnn_threat, 1)}%) "
-            f"cross-verified with Spectral FFT ({round(fft_threat, 1)}%) & Spatial Math ({round(math_threat, 1)}%). "
+            f"[{verdict_label}] Compression-Aware Fusion: Adjusted CNN ({round(adjusted_cnn, 1)}%) "
+            f"fused with Adjusted Math ({round(adjusted_math, 1)}%). "
             f"Final Fused Probability: {round(fused_score, 1)}%."
         )
             
@@ -210,7 +210,6 @@ def analyze_image(image_path: str) -> dict:
             img = orig_img.convert('RGB')
             cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             
-            # Send clean, unmanipulated pixels to ViT to preserve diffusion noise
             cnn_pil = img.copy()
             cnn_pil.thumbnail((1024, 1024))
             buf = io.BytesIO()
