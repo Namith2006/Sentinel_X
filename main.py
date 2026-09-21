@@ -29,6 +29,7 @@ from typing import Any
 import requests
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -243,6 +244,25 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Catches FastAPI 422 HTTP validation errors and formats them for the UI."""
+    origin = request.headers.get("origin", "*")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": True,
+            "status": "HTTP 422",
+            "reason": "Data Validation Error (Missing python-multipart or incorrect payload structure).",
+            "signs": [str(err) for err in exc.errors()],
+        },
+        headers={
+            "Access-Control-Allow-Origin": origin if origin else "*",
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
+
+
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -430,7 +450,23 @@ async def api_scan_url(
 
 
 @app.post("/api/scan-image")
-async def api_scan_image(file: UploadFile = File(...)):
+async def api_scan_image(request: Request, file: UploadFile | None = File(None)):
+    """Receives image, routes to Deepfake Engine, falls back safely if parameter binding fails."""
+    
+    if file is None:
+        try:
+            form = await request.form()
+            file = form.get("file") or form.get("image")
+        except Exception:
+            pass
+
+    if not file or not hasattr(file, "filename"):
+        return {
+            "error": True,
+            "reason": "Missing 'file' payload in form data. Ensure 'python-multipart' is installed.",
+            "signs": ["Request parsing failed at the API gateway."]
+        }
+
     original_filename = file.filename or "uploaded_image"
     suffix = os.path.splitext(original_filename)[1] or ".bin"
     tmp_path = None
@@ -454,7 +490,6 @@ async def api_scan_image(file: UploadFile = File(...)):
             except OSError:
                 pass
 
-    # Normalize output and strictly enforce JSON-compatible Python types
     result = _normalize_image(raw, original_filename)
     result = to_json_serializable(result)
     
