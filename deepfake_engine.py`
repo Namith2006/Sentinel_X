@@ -52,7 +52,7 @@ class QuadGateForensicSuite:
         except Exception:
             ela_score = 0.0
 
-        # Define Heavy Compression based on ELA
+        # Define Heavy Compression based on ELA (Requirement 1)
         self.features['is_heavily_compressed'] = (ela_score > 20.0)
         
         if has_native_metadata and ela_score <= 8.0:
@@ -65,7 +65,8 @@ class QuadGateForensicSuite:
             self.auth_tier = "Low"
             self.container_log = "FAIL (Heavy Artifacts/Stripped)"
             
-        # Metadata is neutral unless a conflict is found
+        # Metadata is now neutral unless a specific conflict is found (Requirement 3)
+        # For this version, we treat stripped as None/Neutral
         self.metadata_score = None 
         self.metadata_log = "Neutral (Stripped or Standard)"
 
@@ -134,8 +135,9 @@ class QuadGateForensicSuite:
             self.neural_log = "Timeout/Error"
 
     def gate_4_biological(self, cv_img: np.ndarray):
-        """GATE 4: Biological Layer with Face Detection"""
+        """GATE 4: Biological Layer with Face Detection (Requirement 2)"""
         try:
+            # Use OpenCV Haar Cascades for face detection
             face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
             gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, 1.1, 4)
@@ -147,6 +149,7 @@ class QuadGateForensicSuite:
                 return
 
             self.features['bio_analysis_available'] = True
+            # Use the largest face found
             x, y, w, h = max(faces, key=lambda b: b[2] * b[3])
             roi = cv_img[y:y+h, x:x+w]
             
@@ -174,23 +177,29 @@ class QuadGateForensicSuite:
         """THE GRAND JURY: Weighted Evidence Fusion"""
         evidence, weights = [], []
 
+        # Neural (High Weight)
         if self.neural_score is not None:
             evidence.append(self.neural_score)
             weights.append(0.55)
 
+        # Signal (Dynamic Weight based on compression)
         if self.signal_score is not None:
+            # Reduce weight if heavily compressed (Requirement 1)
             w = 0.20 * (0.5 if self.features.get('is_heavily_compressed', False) else 1.0)
             evidence.append(self.signal_score)
             weights.append(w)
 
+        # Bio (Low weight, conditional)
         if self.features.get('bio_analysis_available', False) and self.bio_score is not None:
             evidence.append(self.bio_score)
             weights.append(0.15)
 
+        # Metadata (Neutral by default)
         if self.metadata_score is not None:
             evidence.append(self.metadata_score)
             weights.append(0.10)
 
+        # 1. Normalized Fusion
         total_w = sum(weights)
         if total_w == 0:
             fused_score, verdict = 50.0, "UNCERTAIN"
@@ -198,18 +207,21 @@ class QuadGateForensicSuite:
             fused_score = sum(s*w for s,w in zip(evidence, weights)) / total_w
             fused_score = max(0.0, min(100.0, fused_score))
 
+        # 2. Smoking Gun Check (Requirement 4)
         forensic_reliable = not self.features.get('is_heavily_compressed', False)
         smoking_gun = (
             self.neural_score is not None and self.signal_score is not None and
             self.neural_score >= 70 and self.signal_score >= 70 and forensic_reliable
         )
 
+        # 3. Disagreement Check (Requirement 2)
         disagreement = False
         if self.neural_score is not None and self.signal_score is not None:
             if (self.neural_score >= 80 and self.signal_score <= 30) or \
                (self.neural_score <= 20 and self.signal_score >= 70):
                 disagreement = True
 
+        # 4. Final Verdict Mapping (Requirement 6)
         if smoking_gun:
             verdict = "AI-GENERATED"
         elif disagreement:
@@ -240,8 +252,10 @@ def analyze_image(image_path: str) -> dict:
         with Image.open(image_path) as orig_img:
             img = orig_img.convert('RGB')
             ensemble.gate_1_container(img)
+            
             raw_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             cv_img = ensemble._resize_inter_area(raw_cv)
+            
             buf = io.BytesIO()
             img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
             img.save(buf, format="JPEG", quality=85)
@@ -255,7 +269,7 @@ def analyze_image(image_path: str) -> dict:
 
         return {
             "error": False,
-            "verdict": verdict,
+            "verdict": verdict, # AI-GENERATED, UNCERTAIN, LIKELY REAL
             "fused_score": float(round(fused_score, 2)),
             "reason": str(audit_report),
             "detailed_analysis": {

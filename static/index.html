@@ -83,18 +83,15 @@
             backdrop-filter: blur(10px);
         }
 
-        /* Gauge arc smooth animation */
         #gaugeArc {
             transition: stroke-dashoffset 1s ease, stroke 0.5s ease;
         }
 
-        /* Severity badges inside the Llama-3 panel */
         .sev-critical { background: rgba(244, 63, 94, 0.12);  border: 1px solid rgba(244, 63, 94, 0.4);  color: #fda4af; }
         .sev-high     { background: rgba(249, 115, 22, 0.12); border: 1px solid rgba(249, 115, 22, 0.4); color: #fdba74; }
         .sev-medium   { background: rgba(250, 204, 21, 0.12); border: 1px solid rgba(250, 204, 21, 0.4); color: #fde68a; }
         .sev-low      { background: rgba(34, 197, 94, 0.12);  border: 1px solid rgba(34, 197, 94, 0.4);  color: #86efac; }
 
-        /* New row flash on prepend */
         @keyframes row-flash {
             0%   { background: rgba(34, 211, 238, 0.25); }
             100% { background: transparent; }
@@ -104,7 +101,6 @@
 </head>
 <body class="bg-brand-dark text-slate-100 font-sans antialiased">
 
-    <!-- =================== NEW: ABOUT PROJECT MODAL =================== -->
     <div id="aboutModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/90 backdrop-blur-sm p-4">
         <div class="glass-strong border border-cyan-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
             <div class="flex items-center justify-between pb-3 border-b border-slate-700">
@@ -128,7 +124,6 @@
         </div>
     </div>
 
-    <!-- =================== WEBAUTHN BIOMETRIC LOCK OVERLAY =================== -->
     <div id="lockScreen" class="fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/95">
         <div class="glass-strong max-w-md w-full mx-4 p-8 rounded-2xl text-center shadow-neon-cyan">
             <div class="mx-auto w-20 h-20 rounded-full bg-cyan-500/10 flex items-center justify-center pulse-ring mb-6">
@@ -157,10 +152,8 @@
         </div>
     </div>
 
-    <!-- =================== MAIN DASHBOARD =================== -->
     <div id="dashboard" class="hidden max-w-7xl mx-auto px-6 py-8">
 
-        <!-- HEADER -->
         <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center pulse-ring">
@@ -175,13 +168,11 @@
             </div>
 
             <div class="flex items-center gap-4 text-sm">
-                <!-- NEW: About Project Button -->
                 <button onclick="toggleAboutModal(true)" 
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10 transition font-medium text-xs md:text-sm">
                     <span>ℹ️</span> <span class="hidden sm:inline">About Project</span>
                 </button>
 
-                <!-- Global Refresh Button -->
                 <button onclick="clearAll()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-400 border border-slate-700 transition" title="Clear all fields and results">
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -197,10 +188,8 @@
             </div>
         </header>
 
-        <!-- =================== TOP ROW: SCORE GAUGE + ENGINE STATUS =================== -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 
-            <!-- CIRCULAR SECURITY SCORE GAUGE -->
             <div class="glass rounded-2xl p-6 flex flex-col items-center justify-center">
                 <h2 class="text-sm font-semibold tracking-widest text-cyan-300 uppercase mb-4">Security Score</h2>
                 <div class="relative w-48 h-48">
@@ -217,7 +206,6 @@
                 <p id="gaugeLabel" class="mt-4 text-sm text-slate-400">Initializing…</p>
             </div>
 
-            <!-- ACTIVE ENGINE STATUSES -->
             <div class="glass rounded-2xl p-6 lg:col-span-2 flex flex-col">
                 <h2 class="text-sm font-semibold tracking-widest text-cyan-300 uppercase mb-4">Active Engines</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
@@ -265,10 +253,8 @@
             </div>
         </div>
 
-        <!-- =================== MIDDLE ROW: THREE INPUT CARDS =================== -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
 
-            <!-- URL / PHISHING SCANNER -->
             <div class="glass rounded-2xl p-5">
                 <div class="flex items-center gap-2 mb-3">
                     <span class="text-2xl">🌐</span>
@@ -279,7 +265,6 @@
                        aria-label="URL to scan for phishing threats"
                        class="w-full px-3 py-2 rounded-lg bg-cyber-700 border border-slate-700 focus:border-cyan-400 focus:outline-none text-sm font-mono">
                 
-                <!-- Split Button Row for Scan Link and Clear Result -->
                 <div class="flex gap-2 mt-3">
                     <button onclick="scanUrl()" class="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-cyber-900 font-bold rounded-lg transition text-sm">
                         Scan Link
@@ -293,7 +278,6 @@
                 <div id="urlResult" class="hidden mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono"></div>
             </div>
 
-            <!-- DEEPFAKE IMAGE UPLOADER (DRAG-AND-DROP) -->
             <div class="glass rounded-2xl p-5">
                 <div class="flex items-center gap-2 mb-3">
                     <span class="text-2xl">🖼️</span>
@@ -311,7 +295,6 @@
                     <p id="fileName" class="text-[10px] text-slate-500 mt-1 font-mono">No file selected</p>
                 </div>
 
-                <!-- NEW: Clear Upload Button -->
                 <button type="button" onclick="clearImageResult()" 
                         class="w-full mt-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-semibold tracking-wide uppercase transition hover:text-white">
                     Clear Upload
@@ -320,7 +303,6 @@
                 <div id="imageResult" class="hidden mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono"></div>
             </div>
 
-            <!-- PASSWORD CHECKER -->
             <div class="glass rounded-2xl p-5">
                 <div class="flex items-center gap-2 mb-3">
                     <span class="text-2xl">🔑</span>
@@ -339,7 +321,6 @@
                     </button>
                 </div>
 
-                <!-- NEW: Split Button Row for Check and Clear -->
                 <div class="flex gap-2 mt-3">
                     <button type="button" onclick="checkPassword()"
                             class="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-cyber-900 font-bold rounded-lg transition text-sm">
@@ -355,10 +336,8 @@
             </div>
         </div>
 
-        <!-- =================== BOTTOM ROW: AI EXPERT + CRYPTO LEDGER =================== -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            <!-- AI INCIDENT EXPERT (LLAMA-3 MITIGATION PANEL) -->
             <div class="glass rounded-2xl p-5 flex flex-col">
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
@@ -375,7 +354,6 @@
                 </div>
             </div>
 
-            <!-- SHA-256 CRYPTOGRAPHIC LEDGER -->
             <div class="glass rounded-2xl p-5 flex flex-col">
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-2">
@@ -408,17 +386,13 @@
         </footer>
     </div>
     
-    <!-- =================== FLOATING AI SECURITY ASSISTANT =================== -->
-    <!-- Floating Toggle Button -->
     <button id="chatToggle" onclick="toggleChat()" 
             title="Toggle AI Assistant" aria-label="Toggle AI Assistant"
             class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-cyan-500 hover:bg-cyan-400 flex items-center justify-center shadow-neon-cyan transition z-40 pulse-ring">
         <span class="text-2xl">🤖</span>
     </button>
 
-    <!-- Chat Window -->
     <div id="chatWindow" class="hidden fixed bottom-24 right-6 w-80 md:w-96 h-[450px] glass-strong rounded-2xl flex flex-col z-50 overflow-hidden shadow-2xl border border-cyan-500/30">
-        <!-- Chat Header -->
         <div class="bg-cyber-900/80 p-4 border-b border-slate-700 flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <span class="led-dot led-online"></span>
@@ -427,17 +401,15 @@
             <button onclick="toggleChat()" title="Close Chat" aria-label="Close Chat" class="text-slate-400 hover:text-white transition">✖</button>
         </div>
         
-        <!-- Chat Messages Area -->
         <div id="chatMessages" class="flex-1 min-h-0 p-4 overflow-y-auto scrollbar-thin space-y-4 bg-cyber-900/40">
             <div class="flex gap-3">
                 <div class="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center shrink-0">🤖</div>
-                <div class="bg-cyber-800 border border-slate-700 p-3 rounded-lg rounded-tl-none text-xs text-slate-300 leading-relaxed shadow-sm">
+                <div class="bg-cyber-800 border border-slate-700 p-3 rounded-lg rounded-tl-none text-xs text-slate-300 leading-relaxed shadow-sm max-w-[85%]">
                     Operator, I am online. Ask me anything about system hardening, privacy hygiene, or analyzing current threat vectors.
                 </div>
             </div>
         </div>
 
-        <!-- Chat Input Area -->
         <div class="p-3 border-t border-slate-700 bg-cyber-900/80 flex gap-2">
             <input id="chatInput" type="text" placeholder="Type a security question..." 
                    class="flex-1 px-3 py-2 rounded-lg bg-cyber-700 border border-slate-600 focus:border-cyan-400 focus:outline-none text-xs font-mono text-slate-200 placeholder-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -452,21 +424,18 @@
         </div>
     </div>
     
-    <!-- =================== JAVASCRIPT =================== -->
     <script>
-    // ---------- CONFIG ----------
     const API = "https://sentinel-x-vml9.onrender.com";
     const RP_NAME = "Sentinel X";
     const USER_ID = "sentinel-operator-001";
     const CRED_KEY = "sentinel_x_passkey_id";
 
-    // ---------- HELPERS ----------
     const $  = (id) => document.getElementById(id);
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     function bytesToB64Url(buf) {
         return btoa(String.fromCharCode(...new Uint8Array(buf)))
-            .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+            .replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');
     }
     function b64UrlToBytes(s) {
         s = s.replace(/-/g,'+').replace(/_/g,'/');
@@ -477,22 +446,16 @@
         return out;
     }
 
-    // ---------- NEW: TOGGLE ABOUT MODAL ----------
     function toggleAboutModal(show) {
         const modal = $('aboutModal');
-        if (modal) {
-            modal.classList.toggle('hidden', !show);
-        }
+        if (modal) modal.classList.toggle('hidden', !show);
     }
 
-    // ---------- NEW: CLEAR URL RESULT BUTTON LOGIC ----------
     function clearUrlResult() {
         closeResult('urlResult', 'urlInput');
-        // Reset the engine dot indicator if desired
         setEngine("phishing", "online"); 
     }
 
-    // ---------- NEW: CLEAR IMAGE / PASSWORD BUTTON LOGIC ----------
     function clearImageResult() {
         closeResult('imageResult', 'imageInput', 'fileName');
         setEngine("deepfake", "online"); 
@@ -503,19 +466,12 @@
         setEngine("password", "online"); 
     }
 
-    // ---------- CLEARING FUNCTIONS ----------
     function closeResult(boxId, inputId, extraId) {
         const box = $(boxId);
-        if (box) {
-            box.classList.add("hidden");
-            box.innerHTML = "";
-        }
+        if (box) { box.classList.add("hidden"); box.innerHTML = ""; }
         if (inputId) {
             const input = $(inputId);
-            if (input) {
-                if (input.type === 'file') input.value = "";
-                else input.value = "";
-            }
+            if (input) { if (input.type === 'file') input.value = ""; else input.value = ""; }
         }
         if (extraId) {
             const extra = $(extraId);
@@ -527,11 +483,9 @@
         closeResult('urlResult', 'urlInput');
         closeResult('imageResult', 'imageInput', 'fileName');
         closeResult('passwordResult', 'passwordInput');
-        
-        // Reset Llama-3 Panel
         const expertPanel = $("expertPanel");
         const expertStatus = $("expertStatus");
-        if (expertPanel) expertPanel.innerHTML = '<div class="text-slate-500 text-sm italic flex items-center gap-2"><span class="led-dot led-busy"></span>No active incident. Mitigation engine is on standby.</div>';
+        if (expertPanel) expertPanel.innerHTML = '<div class=\"text-slate-500 text-sm italic flex items-center gap-2\"><span class=\"led-dot led-busy\"></span>No active incident. Mitigation engine is on standby.</div>';
         if (expertStatus) expertStatus.textContent = "standby";
     }
 
@@ -593,7 +547,6 @@
         return out;
     }
 
-    // ---------- WEBAUTHN ----------
     async function registerPasskey() {
         if (!window.isSecureContext) {
             lockMsg("HTTPS required for hardware security.", "err");
@@ -602,10 +555,8 @@
             unlockDashboard();
             return;
         }
-
         lockMsg("Generating passkey challenge…");
         const challenge = crypto.getRandomValues(new Uint8Array(32));
-
         const publicKey = {
             challenge,
             rp: { name: RP_NAME },
@@ -627,7 +578,6 @@
             timeout: 60000,
             attestation: "none"
         };
-
         try {
             const cred = await navigator.credentials.create({ publicKey });
             if (!cred) throw new Error("No credential returned.");
@@ -651,7 +601,6 @@
             unlockDashboard();
             return;
         }
-
         const stored = localStorage.getItem(CRED_KEY);
         if (!stored) {
             lockMsg("No passkey found on this device. Click 'Register' first.", "err");
@@ -659,7 +608,6 @@
         }
         lockMsg("Awaiting biometric / device PIN…");
         const challenge = crypto.getRandomValues(new Uint8Array(32));
-
         const publicKey = {
             challenge,
             rpId: window.location.hostname || "127.0.0.1",
@@ -671,7 +619,6 @@
             userVerification: "required",
             timeout: 60000
         };
-
         try {
             const assertion = await navigator.credentials.get({ publicKey });
             if (!assertion) throw new Error("No assertion returned.");
@@ -680,18 +627,9 @@
             await sleep(500);
             unlockDashboard();
         } catch (e) {
-            lockMsg("Hardware authentication failed or cancelled.", "err");
+            lockMsg("Authentication Error", "err");
             setAuthStatus("Authentication Error");
         }
-    }
-
-    function bypassLock() {
-        const lock = $("lockScreen");
-        const dash = $("dashboard");
-        lock.classList.add("hidden");
-        dash.classList.remove("hidden", "opacity-20", "pointer-events-none");
-        setAuthStatus("Operator override · guard bypassed");
-        unlockDashboard();
     }
 
     function unlockDashboard() {
@@ -727,56 +665,29 @@
             (v >= 80 ? "text-emerald-400" : v >= 50 ? "text-amber-400" : "text-rose-400");
     }
 
-   async function refreshScore() {
-        // 1. Check if the backend is alive
+    async function refreshScore() {
         try {
             const r = await fetch(`${API}/api/health`);
             setBackend(r.ok ? "online" : "offline");
         } catch {
             setBackend("offline");
         }
-
-        // 2. Calculate actual score from the local ledger history
         const saved = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
-        
-        let currentScore = 100; // Baseline perfect score
-        
-        // Loop backwards (oldest events first) to simulate real-time score recovery
+        let currentScore = 100;
         for (let i = saved.length - 1; i >= 0; i--) {
             const status = saved[i].status.toLowerCase();
-            
             if (status.includes("threat") || status.includes("compromised")) {
-                currentScore -= 20; // Major deduction for active threats
+                currentScore -= 20;
             } else if (status.includes("error")) {
-                currentScore -= 5;  // Minor deduction for engine API errors
+                currentScore -= 5;
             } else if (status.includes("safe") || status.includes("strong") || status.includes("ok")) {
-                currentScore += 10; // Recovery bonus for clean scans
+                currentScore += 10;
             }
-            
-            // Lock the score between 0 and 100 after every single event
             currentScore = Math.max(0, Math.min(100, currentScore));
         }
-
-        // 3. Update the UI gauge
         setGauge(currentScore);
     }
 
-    async function pollBackendHealth() {
-        try {
-            const r = await fetch(`${API}/api/health`, { method: "GET", cache: "no-store" }); 
-            if (r.ok) {
-                setBackend("online");
-                return true;
-            }
-            setBackend("offline");
-            return false;
-        } catch {
-            setBackend("offline");
-            return false;
-        }
-    }
-
-    // ---------- API CONNECTION FAILED RENDERER ----------
     function showApiError(box, inputId, extraId, label) {
         const closeBtn = `<button type="button" onclick="closeResult('${box.id}', '${inputId}', '${extraId}')" class="absolute top-2 right-2 p-1 text-slate-400 hover:text-white transition leading-none" title="Clear Result">✖</button>`;
         box.classList.remove("hidden");
@@ -784,23 +695,17 @@
         box.innerHTML = closeBtn + `❌ <strong>API CONNECTION FAILED</strong><br><span class="text-xs text-rose-300/80">The ${label} engine is currently unreachable. Check server logs.</span>`;
     }
 
-    // ============================================================
-    // 1) scanUrl()
-    // ============================================================
     async function scanUrl() {
         const url = $("urlInput").value.trim();
         const box = $("urlResult");
         if (!url) { alert("Enter a URL first."); return; }
-
         const closeBtn = `<button type="button" onclick="closeResult('urlResult', 'urlInput')" class="absolute top-2 right-2 p-1 text-slate-400 hover:text-white transition leading-none" title="Clear Result">✖</button>`;
-
         setBackend("busy");
         setEngine("phishing", "busy");
         box.classList.remove("hidden");
         box.className = "mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono text-cyan-200 relative pr-8";
         box.innerHTML = closeBtn + "⏳ ANALYZING...";
-
-      try {
+        try {
             const response = await fetch(`${API}/api/scan-url`, { 
                 method: "POST", 
                 headers: { "Content-Type": "application/json" }, 
@@ -808,34 +713,31 @@
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-
             const risk = Number(data.risk_score ?? parseFloat(String(data.phishing_risk_percent ?? "0").replace("%","")) ?? 0);
             const isThreat = risk >= 70.0 || data.is_phishing;
             const isSuspicious = risk >= 35.0 && risk < 70.0;
-
             if (isThreat) {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Status:</strong> 🚨 THREAT DETECTED</div>
-                    <div class="break-all"><strong>URL:</strong> ${url}</div>
+                    <div class=\"break-all\"><strong>URL:</strong> ${url}</div>
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
-                    <div class="text-xs text-rose-300/80 mt-1">${data.reason || "Phishing signal confirmed."}</div>`;
+                    <div class=\"text-xs text-rose-300/80 mt-1\">${data.reason || \"Phishing signal confirmed.\"}</div>`;
             } else if (isSuspicious) {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-amber-500/10 border border-amber-500/40 text-amber-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Status:</strong> ⚠️ SUSPICIOUS</div>
-                    <div class="break-all"><strong>URL:</strong> ${url}</div>
+                    <div class=\"break-all\"><strong>URL:</strong> ${url}</div>
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
-                    <div class="text-xs text-amber-300/80 mt-1">${data.reason || "Unverified or risky domain."}</div>`;
+                    <div class=\"text-xs text-amber-300/80 mt-1\">${data.reason || \"Unverified or risky domain.\"}</div>`;
             } else {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Status:</strong> ✅ SAFE</div>
-                    <div class="break-all"><strong>URL:</strong> ${url}</div>
+                    <div class=\"break-all\"><strong>URL:</strong> ${url}</div>
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
-                    <div class="text-xs text-emerald-300/80 mt-1">${data.reason || "No phishing indicators found."}</div>`;
+                    <div class=\"text-xs text-emerald-300/80 mt-1\">${data.reason || \"No phishing indicators found.\"}</div>`;
             }
-
             if (isThreat || isSuspicious) triggerMitigation("phishing", { url, risk, ...data });
             logLedger("phishing", isThreat ? "THREAT" : (isSuspicious ? "SUSPICIOUS" : "SAFE"));
             setEngine("phishing", "online");
@@ -848,76 +750,70 @@
         }
     }
 
-    // ============================================================
-    // 2) handleFileUpload()
-    // ============================================================
     async function handleFileUpload(event) {
         event.preventDefault();
         const input = $("imageInput");
         const file = (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]) || (input.files && input.files[0]) || null;
         const box = $("imageResult");
         if (!file) return;
-
         if (event.dataTransfer && event.dataTransfer.files[0]) {
             const dt = new DataTransfer();
             dt.items.add(file);
             input.files = dt.files;
         }
         $("fileName").textContent = file.name;
-
         const closeBtn = `<button type="button" onclick="closeResult('imageResult', 'imageInput', 'fileName')" class="absolute top-2 right-2 p-1 text-slate-400 hover:text-white transition leading-none" title="Clear Result">✖</button>`;
-
         setBackend("busy");
         setEngine("deepfake", "busy");
         box.classList.remove("hidden");
         box.className = "mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono text-purple-200 relative pr-8";
         box.innerHTML = closeBtn + "⏳ ANALYZING IMAGE...";
-
         try {
             const formData = new FormData();
             formData.append("file", file);
-
             const response = await fetch(`${API}/api/scan-image`, { 
                 method: "POST", 
                 body: formData 
             });
-            
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-
             if (data.status === "SYSTEM MESSAGE" || data.error) {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Result:</strong> ⚠️ API ERROR</div>
-                    <div class="break-all"><strong>File:</strong> ${file.name}</div>
-                    <div class="mt-2 text-xs text-slate-300 border-t border-rose-500/30 pt-2">
-                        <span class="font-bold text-rose-400">Analysis:</span> ${data.reason || "Cloud AI failed to respond."}
-                        <ul class="mt-2 text-slate-400">
-                            ${(data.signs || []).map(sign => `<li class="ml-4 list-disc text-[11px] text-slate-400 mt-0.5">${sign}</li>`).join("")}
-                        </ul>
-                    </div>`;
+                    <div class=\"break-all\"><strong>File:</strong> ${file.name}</div>
+                    <div class=\"mt-2 text-xs text-slate-300 border-t border-rose-500/30 pt-2\">\n                        <span class=\"font-bold text-rose-400\">Analysis:</span> ${data.reason || \"Cloud AI failed to respond.\"}\n                        <ul class=\"mt-2 text-slate-400\">\n                            ${(data.signs || []).map(sign => `<li class=\"ml-4 list-disc text-[11px] text-slate-400 mt-0.5\">${sign}</li>`).join(\"\")}\n                        </ul>\n                    </div>`;
                 setEngine("deepfake", "offline");
                 return; 
             }
-
-            const fakePct = Number(data.fake_confidence ?? data.fake ?? data.deepfake_probability ?? 0);
-            const realPct = Number(data.real_confidence ?? data.real ?? (100 - fakePct));
-            const isDeepfake = Boolean(data.is_fake ?? data.is_deepfake ?? (fakePct >= 50));
-
-            const signsHtml = (data.signs || []).map(sign => `<li class="ml-4 list-disc text-[11px] text-slate-400 mt-0.5">${sign}</li>`).join("");
-
-            if (isDeepfake) {
+            const signsHtml = (data.signs || []).map(sign => `<li class=\"ml-4 list-disc text-[11px] text-slate-400 mt-0.5\">${sign}</li>`).join("");
+            if (data.verdict === "AI-GENERATED") {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Result:</strong> 🚨 DEEPFAKE DETECTED</div>
-                    <div class="break-all"><strong>File:</strong> ${file.name}</div>
-                    <div><strong>Deepfake Probability:</strong> ${fakePct.toFixed(1)}%</div>
-                    <div class="w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2">
-                        <div class="h-full bg-rose-400" style="width:${Math.min(100, fakePct)}%"></div>
+                    <div class=\"break-all\"><strong>File:</strong> ${file.name}</div>
+                    <div><strong>Deepfake Probability:</strong> ${data.fused_score.toFixed(1)}%</div>
+                    <div class=\"w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2\">
+                        <div class=\"h-full bg-rose-400\" style=\"width:${Math.min(100, data.fused_score)}%\"></div>
                     </div>
-                    <div class="mt-2 text-xs text-slate-300 border-t border-rose-500/30 pt-2">
-                        <span class="font-bold text-cyan-400">Analysis:</span> ${data.reason || "Generative artifacts detected."}
-                        <ul class="mt-2 text-slate-400">
+                    <div class=\"mt-2 text-xs text-slate-300 border-t border-rose-500/30 pt-2\">
+                        <span class=\"font-bold text-cyan-400\">Analysis:</span> ${data.reason || \"Generative artifacts detected.\"}
+                        <ul class=\"mt-2 text-slate-400\">
+                            ${signsHtml}
+                        </ul>
+                    </div>`;
+            } else if (data.verdict === "UNCERTAIN") {
+                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-amber-500/10 border border-amber-500/40 text-amber-200 relative pr-8";
+                box.innerHTML = closeBtn + `
+                    <div><strong>Result:</strong> ⚠️ UNCERTAIN</div>
+                    <div class=\"break-all\"><strong>File:</strong> ${file.name}</div>
+                    <div><strong>Deepfake Probability:</strong> ${data.fused_score.toFixed(1)}%</div>
+                    <div class=\"w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2\">
+                        <div class=\"h-full bg-amber-400\" style=\"width:${Math.min(100, data.fused_score)}%\"></div>
+                    </div>
+                    <div class=\"mt-2 text-xs text-slate-300 border-t border-amber-500/30 pt-2\">
+                        <span class=\"font-bold text-cyan-400\">Analysis:</span> ${data.reason || \"Inconclusive results.\"}
+                        <ul class=\"mt-2 text-slate-400\">
                             ${signsHtml}
                         </ul>
                     </div>`;
@@ -925,47 +821,40 @@
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
                 box.innerHTML = closeBtn + `
                     <div><strong>Result:</strong> ✅ AUTHENTIC</div>
-                    <div class="break-all"><strong>File:</strong> ${file.name}</div>
-                    <div><strong>Deepfake Probability:</strong> ${fakePct.toFixed(1)}%</div>
-                    <div><strong>Real Confidence:</strong> ${realPct.toFixed(1)}%</div>
-                    <div class="w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2">
-                        <div class="h-full bg-emerald-400" style="width:${Math.min(100, realPct)}%"></div>
+                    <div class=\"break-all\"><strong>File:</strong> ${file.name}</div>
+                    <div><strong>Deepfake Probability:</strong> ${data.fused_score.toFixed(1)}%</div>
+                    <div class=\"w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2\">
+                        <div class=\"h-full bg-emerald-400\" style=\"width:${Math.min(100, data.fused_score)}%\"></div>
                     </div>
-                    <div class="mt-2 text-xs text-slate-300 border-t border-emerald-500/30 pt-2">
-                        <span class="font-bold text-cyan-400">Analysis:</span> ${data.reason || "No synthetic anomalies found."}
-                        <ul class="mt-2 text-slate-400">
+                    <div class=\"mt-2 text-xs text-slate-300 border-t border-emerald-500/30 pt-2\">
+                        <span class=\"font-bold text-cyan-400\">Analysis:</span> ${data.reason || \"No synthetic anomalies found.\"}
+                        <ul class=\"mt-2 text-slate-400\">
                             ${signsHtml}
                         </ul>
                     </div>`;
             }
-
-            if (isDeepfake) triggerMitigation("deepfake", { filename: file.name, probability: fakePct, ...data });
-            logLedger("deepfake", isDeepfake ? "THREAT" : "SAFE");
+            if (data.verdict === "AI-GENERATED") triggerMitigation("deepfake", { filename: file.name, probability: data.fused_score, ...data });
+            logLedger("deepfake", data.verdict === "AI-GENERATED" ? "THREAT" : "SAFE");
             setEngine("deepfake", "online");
             setBackend("online");
         } catch (err) {
-            showApiError(box, 'imageInput', 'fileName', "Deepfake");
+            showApiError(box, 'imageInput', 'fileName', \"Deepfake\");
             logLedger("deepfake", "API ERROR");
             setEngine("deepfake", "offline");
             setBackend("offline");
         }
     }
-    // ============================================================
-    // 3) checkPassword()
-    // ============================================================
+
     async function checkPassword() {
         const pw = $("passwordInput").value;
         const box = $("passwordResult");
         if (!pw) { alert("Type a password first."); return; }
-
         const closeBtn = `<button type="button" onclick="closeResult('passwordResult', 'passwordInput')" class="absolute top-2 right-2 p-1 text-slate-400 hover:text-white transition leading-none" title="Clear Result">✖</button>`;
-
         setBackend("busy");
         setEngine("password", "busy");
         box.classList.remove("hidden");
         box.className = "mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono text-emerald-200 relative pr-8";
         box.innerHTML = closeBtn + "⏳ ANALYZING PASSWORD...";
-
         try {
             const response = await fetch(`${API}/api/check-password`, { 
                 method: "POST", 
@@ -974,36 +863,33 @@
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-
             const breachCount = Number(data.breach_count ?? data.pwned_count ?? 0);
             const strength = Number(data.strength ?? 0);
             const isCompromised = Boolean(data.is_breached ?? data.is_compromised ?? breachCount > 0);
-
             if (isCompromised || strength < 50) {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
                 box.innerHTML = closeBtn + `
-                    <div><strong>Status:</strong> 🚨 ${data.status || "WEAK / COMPROMISED"}</div>
+                    <div><strong>Status:</strong> 🚨 ${data.status || \"WEAK / COMPROMISED\"}</div>
                     <div><strong>Strength:</strong> ${strength}/100</div>
                     <div><strong>Breach History:</strong> Found in ${breachCount.toLocaleString()} known breaches</div>
-                    <div class="text-xs text-rose-300/80 mt-1">${data.suggestion || "Rotate this password immediately."}</div>`;
+                    <div class=\"text-xs text-rose-300/80 mt-1\">${data.suggestion || \"Rotate this password immediately.\"}</div>`;
             } else {
                 box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 relative pr-8";
                 box.innerHTML = closeBtn + `
-                    <div><strong>Status:</strong> ✅ ${data.status || "STRONG"}</div>
+                    <div><strong>Status:</strong> ✅ ${data.status || \"STRONG\"}</div>
                     <div><strong>Strength:</strong> ${strength}/100</div>
                     <div><strong>Breach History:</strong> 0 known breaches</div>
-                    <div class="text-xs text-emerald-300/80 mt-1">${data.suggestion || "Password looks strong."}</div>`;
+                    <div class=\"text-xs text-emerald-300/80 mt-1\">${data.suggestion || \"Password looks strong.\"}</div>`;
             }
-
             if (isCompromised) triggerMitigation("weak_password", { length: pw.length, breachCount, strength, ...data });
             logLedger("password", isCompromised ? "COMPROMISED" : (strength >= 80 ? "STRONG" : "OK"));
             setEngine("password", "online");
             setBackend("online");
         } catch (err) {
-            showApiError(box, 'passwordInput', null, "Password");
-            logLedger("password", "API ERROR");
-            setEngine("password", "offline");
-            setBackend("offline");
+            showApiError(box, 'passwordInput', null, \"Password\");
+            logLedger(\"password\", \"API ERROR\");
+            setEngine(\"password\", \"offline\");
+            setBackend(\"offline\");
         }
     }
 
@@ -1012,26 +898,20 @@
         i.type = i.type === "password" ? "text" : "password";
     }
 
-    // ============================================================
-    // 4) triggerMitigation() - Deep Context-Aware Upgrades
-    // ============================================================
     async function triggerMitigation(threatType, details) {
         const panel = $("expertPanel");
         const status = $("expertStatus");
         status.textContent = "analyzing context...";
-
         const risk = Number(details.risk_score ?? details.risk ?? details.probability ?? 70);
         const severity = risk >= 85 ? "critical" : risk >= 65 ? "high" : risk >= 35 ? "medium" : "low";
         const sevClass = `sev-${severity}`;
-
         let dynamicSteps = [];
-
         if (threatType === "phishing") {
             const url = details.url || "the flagged domain";
             const reason = details.reason || details.status || "Heuristic threat patterns detected";
             dynamicSteps = [
-                { title: "Network Isolation & Triage", detail: `Immediately block outbound connections to <span class="text-cyan-400 font-mono bg-cyber-900 px-1.5 py-0.5 rounded break-all">${url}</span> at the firewall/DNS level.` },
-                { title: "Threat Eradication", detail: `The scanner identified a <span class="text-rose-400 font-mono font-bold">${risk.toFixed(1)}%</span> risk score. Signal triggers: <span class="text-amber-400 italic">${reason}</span>. Purge browser cache, cookies, and active session tokens on the affected endpoint.` },
+                { title: "Network Isolation & Triage", detail: `Immediately block outbound connections to <span class=\"text-cyan-400 font-mono bg-cyber-900 px-1.5 py-0.5 rounded break-all\">${url}</span> at the firewall/DNS level.` },
+                { title: "Threat Eradication", detail: `The scanner identified a <span class=\"text-rose-400 font-mono font-bold\">${risk.toFixed(1)}%</span> risk score. Signal triggers: <span class=\"text-amber-400 italic\">${reason}</span>. Purge browser cache, cookies, and active session tokens on the affected endpoint.` },
                 { title: "Credential Verification", detail: "If any operator interacted with this URL, force an immediate zero-trust password rotation and verify hardware MFA keys." }
             ];
         } else if (threatType === "deepfake") {
@@ -1039,8 +919,8 @@
             const conf = Number(details.fake_confidence || details.probability || risk).toFixed(1);
             const pipeline = details.analyzed_via || "Neural Tensor + Compression ELA";
             dynamicSteps = [
-                { title: "Digital Quarantine", detail: `Halt internal distribution of <span class="text-purple-400 font-mono bg-cyber-900 px-1.5 py-0.5 rounded break-all">${file}</span>. Move the asset to an isolated forensic vault.` },
-                { title: "Forensic Analysis Breakdown", detail: `The pipeline (<span class="text-slate-400 font-mono text-[10px]">${pipeline}</span>) identified synthetic manipulation with <span class="text-rose-400 font-mono font-bold">${conf}%</span> confidence. High-frequency noise residuals match generative AI signatures.` },
+                { title: "Digital Quarantine", detail: `Halt internal distribution of <span class=\"text-purple-400 font-mono bg-cyber-900 px-1.5 py-0.5 rounded break-all\">${file}</span>. Move the asset to an isolated forensic vault.` },
+                { title: "Forensic Analysis Breakdown", detail: `The pipeline (<span class=\"text-slate-400 font-mono text-[10px]\">${pipeline}</span>) identified synthetic manipulation with <span class=\"text-rose-400 font-mono font-bold\">${conf}%</span> confidence. High-frequency noise residuals match generative AI signatures.` },
                 { title: "Identity Verification", detail: "Do not trust the visual/audio claims in this media. Re-establish contact with the supposed entity via an out-of-band, cryptographically verified channel." }
             ];
         } else if (threatType === "weak_password") {
@@ -1048,46 +928,21 @@
             const str = details.strength || 0;
             const hint = details.suggestion || "Requires higher entropy.";
             dynamicSteps = [
-                { title: "Immediate Secret Revocation", detail: `This exact string has appeared in <span class="text-rose-400 font-mono font-bold">${breaches.toLocaleString()}</span> known data breaches across the clear and dark web. It is actively being targeted in credential stuffing attacks.` },
-                { title: "Complexity Audit", detail: `Current cryptographic strength is critically low (<span class="text-amber-400 font-mono font-bold">${str}/100</span>). Engine recommendation: <span class="text-emerald-400 italic">${hint}</span>` },
+                { title: "Immediate Secret Revocation", detail: `This exact string has appeared in <span class=\"text-rose-400 font-mono font-bold\">${breaches.toLocaleString()}</span> known data breaches across the clear and dark web. It is actively being targeted in credential stuffing attacks.` },
+                { title: "Complexity Audit", detail: `Current cryptographic strength is critically low (<span class=\"text-amber-400 font-mono font-bold\">${str}/100</span>). Engine recommendation: <span class=\"text-emerald-400 italic\">${hint}</span>` },
                 { title: "Zero-Knowledge Implementation", detail: "Generate a 16+ character high-entropy passphrase via a zero-knowledge Password Manager. Enforce FIDO2/WebAuthn hardware keys for future authentication." }
             ];
         } else {
             dynamicSteps = [
-                { title: "Isolate Target", detail: `Quarantine the affected asset exhibiting a <span class="text-rose-400 font-mono">${risk.toFixed(1)}%</span> risk profile.` },
+                { title: "Isolate Target", detail: `Quarantine the affected asset exhibiting a <span class=\"text-rose-400 font-mono\">${risk.toFixed(1)}%</span> risk profile.` },
                 { title: "Eradicate Threat", detail: "Remove malicious artifacts and cycle all active operator session tokens." },
                 { title: "System Recovery", detail: "Restore baseline operations from a verified SHA-256 backup state." }
             ];
         }
-
         const planHtml = `
-            <div class="mb-4 flex items-center justify-between">
-                <div>
-                    <p class="text-[10px] text-slate-500 uppercase tracking-widest">Threat Vector</p>
-                    <p class="text-sm font-semibold text-cyan-200">${threatType.toUpperCase()}</p>
-                </div>
-                <span class="px-2.5 py-1 rounded text-[10px] font-mono uppercase ${sevClass} shadow-sm">${severity}</span>
-            </div>
-            <ol class="space-y-3">
-                ${dynamicSteps.map((s, i) => `
-                    <li class="p-3.5 rounded-lg bg-cyber-800/40 border border-slate-700/50 shadow-inner">
-                        <div class="flex items-start gap-3">
-                            <div class="w-6 h-6 rounded bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5">
-                                <span class="text-purple-400 font-mono text-xs">${i+1}</span>
-                            </div>
-                            <div>
-                                <p class="text-sm font-semibold text-slate-200">${s.title}</p>
-                                <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">${s.detail}</p>
-                            </div>
-                        </div>
-                    </li>`).join("")}
-            </ol>
-            <p class="mt-4 text-[10px] text-slate-500 font-mono border-t border-slate-800 pt-2">Generated by Context-Aware Engine · ${new Date().toLocaleTimeString()}</p>
-        `;
-        
+            <div class=\"mb-4 flex items-center justify-between\">\n                <div>\n                    <p class=\"text-[10px] text-slate-500 uppercase tracking-widest\">Threat Vector</p>\n                    <p class=\"text-sm font-semibold text-cyan-200\">${threatType.toUpperCase()}</p>\n                </div>\n                <span class=\"px-2.5 py-1 rounded text-[10px] font-mono uppercase ${sevClass} shadow-sm\">${severity}</span>\n            </div>\n            <ol class=\"space-y-3\">\n                ${dynamicSteps.map((s, i) => `\n                    <li class=\"p-3.5 rounded-lg bg-cyber-800/40 border border-slate-700/50 shadow-inner\">\n                        <div class=\"flex items-start gap-3\">\n                            <div class=\"w-6 h-6 rounded bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5\">\n                                <span class=\"text-purple-400 font-mono text-xs\">${i+1}</span>\n                            </div>\n                            <div>\n                                <p class=\"text-sm font-semibold text-slate-200\">${s.title}</p>\n                                <p class=\"text-xs text-slate-400 mt-1.5 leading-relaxed\">${s.detail}</p>\n                            </div>\n                        </div>\n                    </li>`).join(\"\")}\n            </ol>\n            <p class=\"mt-4 text-[10px] text-slate-500 font-mono border-t border-slate-800 pt-2\">Generated by Context-Aware Engine · ${new Date().toLocaleTimeString()}</p>\n        `;
         panel.innerHTML = planHtml;
         status.textContent = "context loaded";
-
         setEngine("llm", "busy");
         try {
             const r = await fetch(`${API}/api/mitigate`, { 
@@ -1099,29 +954,7 @@
                 const d = await r.json();
                 if (d && Array.isArray(d.steps) && d.steps.length && d.source === "llm") {
                     const llmHtml = `
-                        <div class="mb-4 flex items-center justify-between">
-                            <div>
-                                <p class="text-[10px] text-slate-500 uppercase tracking-widest">Threat Vector</p>
-                                <p class="text-sm font-semibold text-cyan-200">${(d.threat_type || threatType).toUpperCase()}</p>
-                            </div>
-                            <span class="px-2.5 py-1 rounded text-[10px] font-mono uppercase ${`sev-${d.severity || severity}`} shadow-sm">${d.severity || severity}</span>
-                        </div>
-                        <ol class="space-y-3">
-                            ${d.steps.slice(0, 3).map((s, i) => `
-                                <li class="p-3.5 rounded-lg bg-cyber-800/40 border border-slate-700/50 shadow-inner">
-                                    <div class="flex items-start gap-3">
-                                        <div class="w-6 h-6 rounded bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5">
-                                            <span class="text-purple-400 font-mono text-xs">${i+1}</span>
-                                        </div>
-                                        <div>
-                                            <p class="text-sm font-semibold text-slate-200">${s.title || s.name || ("Step " + (i+1))}</p>
-                                            <p class="text-xs text-slate-400 mt-1.5 leading-relaxed">${s.detail || s.description || ""}</p>
-                                        </div>
-                                    </div>
-                                </li>`).join("")}
-                        </ol>
-                        <p class="mt-4 text-[10px] text-slate-500 font-mono border-t border-slate-800 pt-2">Llama-3 (Ollama) · ${new Date().toLocaleTimeString()} · source: ${d.source || "llm"}</p>
-                    `;
+                        <div class=\"mb-4 flex items-center justify-between\">\n                            <div>\n                                <p class=\"text-[10px] text-slate-500 uppercase tracking-widest\">Threat Vector</p>\n                                <p class=\"text-sm font-semibold text-cyan-200\">${(d.threat_type || threatType).toUpperCase()}</p>\n                            </div>\n                            <span class=\"px-2.5 py-1 rounded text-[10px] font-mono uppercase ${`sev-${d.severity || severity}`} shadow-sm\">${d.severity || severity}</span>\n                        </div>\n                        <ol class=\"space-y-3\">\n                            ${d.steps.slice(0, 3).map((s, i) => `\n                                <li class=\"p-3.5 rounded-lg bg-cyber-800/40 border border-slate-700/50 shadow-inner\">\n                                    <div class=\"flex items-start gap-3\">\n                                        <div class=\"w-6 h-6 rounded bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5\">\n                                            <span class=\"text-purple-400 font-mono text-xs\">${i+1}</span>\n                                        </div>\n                                        <div>\n                                            <p class=\"text-sm font-semibold text-slate-200\">${s.title || s.name || (\"Step \" + (i+1))}</p>\n                                            <p class=\"text-xs text-slate-400 mt-1.5 leading-relaxed\">${s.detail || s.description || \"\"}</p>\n                                        </div>\n                                    </div>\n                                </li>`).join(\"\")}\n                        </ol>\n                        <p class=\"mt-4 text-[10px] text-slate-500 font-mono border-t border-slate-800 pt-2\">Llama-3 (Ollama) · ${new Date().toLocaleTimeString()} · source: ${d.source || \"llm\"}</p>\n                    `;
                     panel.innerHTML = llmHtml;
                     setEngine("llm", "online");
                 } else {
@@ -1135,24 +968,18 @@
         }
     }
 
-    // ============================================================
-    // 5) logLedger() - Now with LocalStorage Persistence
-    // ============================================================
     function logLedger(vector, status) {
         const tbody = $("ledgerBody");
         const placeholder = tbody.querySelector("td.italic, td[class*='italic']");
         if (placeholder) tbody.innerHTML = "";
-
         const hash = fakeHash(vector + Date.now() + Math.random());
         const ts = new Date().toISOString().replace("T", " ").slice(0, 19);
         const okish = (status || "").toLowerCase().match(/safe|ok|strong|verified/);
         const color = okish ? "text-emerald-400" : "text-rose-400";
-
         const saved = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
         saved.unshift({ ts, vector, hash, status, color });
-        if (saved.length > 25) saved.length = 25; // keep max 25 rows
+        if (saved.length > 25) saved.length = 25;
         localStorage.setItem("sentinel_ledger", JSON.stringify(saved));
-
         const newRow = document.createElement("tr");
         newRow.className = "border-b border-slate-800 row-flash";
         newRow.innerHTML = `
@@ -1163,7 +990,6 @@
             <td class="py-2 ${color}">${status}</td>
         `;
         tbody.insertBefore(newRow, tbody.firstChild);
-        
         Array.from(tbody.querySelectorAll("tr")).forEach((tr, i) => {
             const cell = tr.querySelector("td");
             if (cell) cell.textContent = (i + 1);
@@ -1171,19 +997,14 @@
         while (tbody.children.length > 25) tbody.removeChild(tbody.lastChild);
     }
     
-    // ============================================================
-    // 6) restoreLedger() - Rebuilds table on page refresh
-    // ============================================================
     function restoreLedger() {
         const saved = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
-        if (!saved.length) return; // If empty, leave the default placeholder
-
+        if (!saved.length) return;
         const tbody = $("ledgerBody");
         tbody.innerHTML = ""; 
-        
         saved.forEach((entry, i) => {
             const newRow = document.createElement("tr");
-            newRow.className = "border-b border-slate-800"; // Notice: No flash animation on load
+            newRow.className = "border-b border-slate-800";
             newRow.innerHTML = `
                 <td class="py-2 pl-2 pr-3 text-slate-500">${i + 1}</td>
                 <td class="py-2 pr-3 text-slate-300">${entry.ts}</td>
@@ -1195,15 +1016,11 @@
         });
     }
 
-    // ---------- DRAG & DROP WIRING ----------
     function wireDropZone() {
         const dz = $("dropZone"), input = $("imageInput");
         dz.addEventListener("click", (e) => { if (e.target.tagName !== "INPUT") input.click(); });
         ["dragenter","dragover"].forEach(ev => dz.addEventListener(ev, e => {
             e.preventDefault(); e.stopPropagation(); dz.classList.add("drag-over");
-        }));
-        ["dragleave","drop"].forEach(ev => dz.addEventListener(ev, e => {
-            e.preventDefault(); e.stopPropagation(); dz.classList.remove("drag-over");e.preventDefault(); e.stopPropagation(); dz.classList.add("drag-over");
         }));
         ["dragleave","drop"].forEach(ev => dz.addEventListener(ev, e => {
             e.preventDefault(); e.stopPropagation(); dz.classList.remove("drag-over");
@@ -1212,9 +1029,6 @@
         input.addEventListener("change", e => handleFileUpload(e));
     }
 
-    // ============================================================
-    // 7) AI Security Chatbot Logic
-    // ============================================================
     function toggleChat() {
         const chat = $("chatWindow");
         chat.classList.toggle("hidden");
@@ -1227,20 +1041,15 @@
 
     async function sendChatMessage() {
         if (isChatProcessing) return; 
-
         const input = $("chatInput");
         const btn = $("chatSendBtn");
         const msg = input.value.trim();
         if (!msg) return;
-
         const chatMessages = $("chatMessages");
-
         const savedLogs = JSON.parse(localStorage.getItem("sentinel_ledger") || "[]");
-
         isChatProcessing = true;
         input.disabled = true;
         btn.disabled = true;
-
         const userHtml = `
             <div class="flex gap-3 justify-end">
                 <div class="bg-cyan-500/10 border border-cyan-500/30 p-3 rounded-lg rounded-tr-none text-xs text-cyan-100 leading-relaxed shadow-sm max-w-[85%]">
@@ -1250,7 +1059,6 @@
         chatMessages.insertAdjacentHTML("beforeend", userHtml);
         input.value = "";
         chatMessages.scrollTop = chatMessages.scrollHeight;
-
         const typingId = "typing-" + Date.now();
         const typingHtml = `
             <div id="${typingId}" class="flex gap-3">
@@ -1261,7 +1069,6 @@
             </div>`;
         chatMessages.insertAdjacentHTML("beforeend", typingHtml);
         chatMessages.scrollTop = chatMessages.scrollHeight;
-
         try {
             const r = await fetch(`${API}/api/chat`, { 
                 method: "POST",
@@ -1271,9 +1078,7 @@
                     logs: savedLogs
                 })
             });
-            
             $(typingId).remove();
-
             if (r.ok) {
                 const d = await r.json();
                 appendAiResponse(d.reply || "I am currently unable to process that request.");
@@ -1293,54 +1098,33 @@
 
     function formatCopilotMessage(rawText) {
         if (!rawText) return "";
-
-        // 1. Normalize line endings
-        let text = rawText.replace(/\r\n/g, "\n").trim();
-
-        // 2. Convert headers safely without crossing line breaks ([^\n*]* prevents runaway matching)
-        text = text.replace(/^\s*\*\*(Posture Summary|Critical Findings|Actionable Remediation[^\n*]*)\*\*:?\s*$/gim, "\n\n### $1\n");
-        text = text.replace(/\*\*(Posture Summary|Critical Findings|Actionable Remediation[^\n*]*)\*\*:?/gi, "\n\n### $1\n");
-
-        // 3. Render ### headers to styled cyan titles (CRITICAL BUG FIX APPLIED HERE)
-        text = text.replace(/^###\s*(.*?)\s*$/gim, '<h4 class="text-cyan-400 font-bold tracking-wide text-xs uppercase mt-4 mb-2 border-b border-cyan-500/20 pb-1">$1</h4>');
-
-        // 4. Convert **bold** tokens to <strong> tags
-        text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-slate-100 font-semibold">$1</strong>');
-
-        // 5. Convert numbered items (1. item) into styled badge rows
-        text = text.replace(/^(\d+)\.\s+(.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1.5 text-slate-300"><span class="bg-cyan-500/20 text-cyan-300 text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 shrink-0 mt-0.5">$1</span><span class="flex-1 leading-relaxed">$2</span></div>');
-
-        // 6. Convert bullet points (- item or * item) into styled bullet rows
-        text = text.replace(/^[-*]\s+(.*$)/gim, '<div class="flex items-start gap-2 ml-1 my-1 text-slate-300"><span class="text-cyan-400 leading-tight shrink-0">•</span><span class="flex-1 leading-relaxed">$1</span></div>');
-
-        // 7. Wrap leftover paragraphs and preserve layout
-        let blocks = text.split(/\n\n+/);
+        let text = rawText.replace(/\\r\\n/g, "\\n").trim();
+        text = text.replace(/^\\s*\\*\\*(Posture Summary|Critical Findings|Actionable Remediation[^\\n*]*)\\*\\*:?\\s*$/gim, "\\n\\n### $1\\n");
+        text = text.replace(/\\*\\*(Posture Summary|Critical Findings|Actionable Remediation[^\\n*]*)\\*\\*:?/gi, "\\n\\n### $1\\n");
+        text = text.replace(/^###\\s*(.*?)\\s*$/gim, '<h4 class=\"text-cyan-400 font-bold tracking-wide text-xs uppercase mt-4 mb-2 border-b border-cyan-500/20 pb-1\">$1</h4>');
+        text = text.replace(/\\*\\*(.*?)\\*\\*/g, '<strong class=\"text-slate-100 font-semibold\">$1</strong>');
+        text = text.replace(/^(\\d+)\\.\\s+(.*$)/gim, '<div class=\"flex items-start gap-2 ml-1 my-1.5 text-slate-300\"><span class=\"bg-cyan-500/20 text-cyan-300 text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-500/30 shrink-0 mt-0.5\">$1</span><span class=\"flex-1 leading-relaxed\">$2</span></div>');
+        text = text.replace(/^[-*]\\s+(.*$)/gim, '<div class=\"flex items-start gap-2 ml-1 my-1 text-slate-300\"><span class=\"text-cyan-400 leading-tight shrink-0\">•</span><span class=\"flex-1 leading-relaxed\">$1</span></div>');
+        let blocks = text.split(/\\n\\n+/);
         text = blocks.map(block => {
             let trimmed = block.trim();
             if (!trimmed) return "";
             if (trimmed.startsWith("<h4") || trimmed.startsWith("<div")) {
                 return trimmed;
             }
-            return `<p class="my-1.5 text-slate-300 leading-relaxed">${trimmed}</p>`;
-        }).join("\n");
-
+            return `<p class=\"my-1.5 text-slate-300 leading-relaxed\">${trimmed}</p>`;
+        }).join("\\n");
         return text;
     }
 
     function appendAiResponse(text) {
         const chatMessages = $("chatMessages");
         const aiHtml = `
-            <div class="flex gap-3">
-                <div class="w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center shrink-0">🤖</div>
-                <div class="bg-cyber-800 border border-slate-700 p-3 rounded-lg rounded-tl-none text-xs text-slate-300 leading-relaxed shadow-sm flex-1 overflow-hidden">
-                    ${formatCopilotMessage(text)}
-                </div>
-            </div>`;
+            <div class=\"flex gap-3\">\n                <div class=\"w-8 h-8 rounded bg-cyan-500/20 flex items-center justify-center shrink-0\">🤖</div>\n                <div class=\"bg-cyber-800 border border-slate-700 p-3 rounded-lg rounded-tl-none text-xs text-slate-300 leading-relaxed shadow-sm flex-1 overflow-hidden\">\n                    ${formatCopilotMessage(text)}\n                </div>\n            </div>`;
         chatMessages.insertAdjacentHTML("beforeend", aiHtml);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // ---------- INIT ----------
     $("registerBtn").addEventListener("click", registerPasskey);
     $("unlockBtn").addEventListener("click", authenticatePasskey);
     wireDropZone();
