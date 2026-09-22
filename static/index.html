@@ -756,7 +756,7 @@
         }
     }
 
-    async function handleFileUpload(event) {
+async function handleFileUpload(event) {
         event.preventDefault();
         const input = $("imageInput");
         const file = (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]) || (input.files && input.files[0]) || null;
@@ -780,7 +780,7 @@
         box.className = "mt-3 p-3 rounded-lg bg-cyber-900/70 text-sm font-mono text-purple-200 relative pr-8";
         box.innerHTML = closeBtn + "⏳ ANALYZING IMAGE...";
         
-       try {
+        try {
             const formData = new FormData();
             formData.append("file", file);
             const response = await fetch(`${API}/api/scan-image`, { 
@@ -788,29 +788,95 @@
                 body: formData 
             });
             
-            // NEW: Extract the exact FastAPI error if the request fails
             if (!response.ok) {
                 let srvErr = `HTTP ${response.status}`;
                 try {
                     const errJson = await response.json();
                     srvErr = errJson.reason || errJson.detail || srvErr;
-                    if (Array.isArray(srvErr)) srvErr = "HTTP 422: Missing python-multipart library.";
                 } catch (e) {}
                 throw new Error(srvErr);
             }
-            
+
             const data = await response.json();
             
-            // ... [Keep all your existing data rendering logic here] ...
-            
+            // Check for backend error payload
+            if (data.status === "SYSTEM MESSAGE" || data.error) {
+                box.className = "mt-3 p-3 rounded-lg text-sm font-mono bg-rose-500/10 border border-rose-500/40 text-rose-200 relative pr-8";
+                box.innerHTML = closeBtn + `
+                    <div><strong>Result:</strong> ⚠️ API ERROR</div>
+                    <div class="break-all"><strong>File:</strong> ${file.name}</div>
+                    <div class="mt-2 text-xs text-slate-300 border-t border-rose-500/30 pt-2 leading-relaxed">
+                        <span class="font-bold text-rose-400">Analysis:</span> ${data.reason || "Analysis failed."}
+                    </div>`;
+                logLedger("deepfake", "API ERROR");
+                setEngine("deepfake", "offline");
+                setBackend("online");
+                return; 
+            }
+
+            // Extract values normalized by main.py
+            const fakeConfidence = parseFloat(data.fake_confidence ?? data.risk_score ?? 0);
+            const isFake = Boolean(data.is_fake);
+            const classification = data.classification || "";
+            const isUncertain = classification.toLowerCase().includes("uncertain") || (fakeConfidence >= 31 && fakeConfidence < 70);
+
+            let theme = "emerald";
+            let verdictTitle = "✅ AUTHENTIC MEDIA";
+            let ledgerStatus = "AUTHENTIC";
+
+            if (isFake || fakeConfidence >= 70) {
+                theme = "rose";
+                verdictTitle = "🚨 DEEPFAKE DETECTED";
+                ledgerStatus = "DEEPFAKE THREAT";
+            } else if (isUncertain) {
+                theme = "amber";
+                verdictTitle = "⚠️ UNCERTAIN / COMPRESSED";
+                ledgerStatus = "UNCERTAIN";
+            }
+
+            // Format multi-line forensic audit report
+            const formattedReason = (data.reason || "Forensic audit complete.").replace(/\\n|\n/g, '<br>');
+            const signsList = (data.signs && data.signs.length)
+                ? `<ul class="mt-2 space-y-1 text-slate-400 text-[11px] list-disc list-inside">
+                    ${data.signs.map(s => `<li>${s}</li>`).join("")}
+                   </ul>`
+                : "";
+
+            // Render complete card to DOM
+            box.className = `mt-3 p-3 rounded-lg text-sm font-mono bg-${theme}-500/10 border border-${theme}-500/40 text-${theme}-200 relative pr-8`;
+            box.innerHTML = closeBtn + `
+                <div><strong>Result:</strong> ${verdictTitle}</div>
+                <div class="break-all"><strong>File:</strong> ${file.name}</div>
+                <div class="mt-1"><strong>Deepfake Probability:</strong> ${fakeConfidence.toFixed(1)}%</div>
+                <div class="w-full bg-slate-700 h-1.5 rounded mt-2 overflow-hidden mb-2">
+                    <div class="h-full bg-${theme}-400" style="width:${Math.min(100, Math.max(0, fakeConfidence))}%"></div>
+                </div>
+                <div class="mt-2 text-xs text-slate-300 border-t border-${theme}-500/30 pt-2 leading-relaxed">
+                    <div class="font-mono text-[11px] whitespace-pre-line leading-relaxed opacity-95">${formattedReason}</div>
+                    ${signsList}
+                </div>`;
+                
+            // Trigger incident mitigation if synthetic markers were verified
+            if (isFake || fakeConfidence >= 70) {
+                triggerMitigation("deepfake", { 
+                    filename: file.name, 
+                    probability: fakeConfidence, 
+                    ...data 
+                });
+            }
+
+            // Update ledger and restore active online indicators
+            logLedger("deepfake", ledgerStatus);
+            setEngine("deepfake", "online");
+            setBackend("online");
+
         } catch (err) {
-            // NEW: Pass the exact error message to the UI
             showApiError(box, 'imageInput', 'fileName', "Deepfake", err.message);
             logLedger("deepfake", "API ERROR");
             setEngine("deepfake", "offline");
+            setBackend("offline");
         }
     }
-
     async function checkPassword() {
         const pw = $("passwordInput").value;
         const box = $("passwordResult");
