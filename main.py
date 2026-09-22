@@ -19,6 +19,7 @@ from typing import Any
 
 import requests
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
@@ -161,6 +162,12 @@ def password_strength_label(score: int, breached: bool, common: bool) -> str:
 async def lifespan(app: FastAPI):
     if len(ledger.chain) <= 1:
         log_event("system", 0.05, {"event": "Backend online — ledger initialized"})
+    # Warm up Deepfake API to prevent cold-start hangs
+    try:
+        import requests
+        requests.post("https://router.huggingface.co/hf-inference/models/prithivMLmods/Deep-Fake-Detector-v2-Model", timeout=5)
+    except:
+        pass
         
     # The "Wake Up" Call: Pings HF in a background thread to prevent cold starts
     def wake_hf_model():
