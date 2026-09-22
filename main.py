@@ -12,6 +12,7 @@ import math
 import os
 import re
 import tempfile
+import asyncio
 import threading
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -463,7 +464,10 @@ async def api_scan_image(request: Request, file: UploadFile | None = File(None))
             tmp.write(await file.read())
             tmp_path = tmp.name
 
-        raw = await run_in_threadpool(analyze_image, tmp_path)
+        try:
+            raw = await asyncio.wait_for(run_in_threadpool(analyze_image, tmp_path), timeout=60.0)
+        except asyncio.TimeoutError:
+            raw = {"error": True, "reason": "Analysis timed out after 60s. The AI model may be cold-starting.", "signs": ["Timeout Error"]}
         
     except Exception as exc:
         raw = {
@@ -731,7 +735,7 @@ CRITICAL UI RULE: NEVER use Markdown tables. Always use standard bullet points a
         }
 
         payload = {
-            "model": "llama-3.3-70b-versatile",
+            "model": "llama-3.1-70b-versatile",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"User Request: {user_message}\n\nSystem Logs:\n{log_context}"}
