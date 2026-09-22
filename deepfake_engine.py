@@ -44,8 +44,9 @@ class SentinelXForensicEngine:
             faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
             if len(faces) > 0:
                 self.bio_valid = True
-                x, y, w, h = max(faces, key=lambda rect: rect[2] * rect[3])
-                self.face_roi = cv_img[y:y+h, x:x+w]
+                # FIX: Prevent variable shadowing by using fx, fy, fw, fh
+                fx, fy, fw, fh = max(faces, key=lambda rect: rect[2] * rect[3])
+                self.face_roi = cv_img[fy:fy+fh, fx:fx+fw]
                 self.audit_logs['sentinel'] = "Resolution & Face Guards Passed."
                 return
                 
@@ -110,7 +111,6 @@ class SentinelXForensicEngine:
             if 'f' in locals(): del f
             if 'fshift' in locals(): del fshift
             if 'mag' in locals(): del mag
-            gc.collect()
 
     def gate_3_neural(self, image_bytes: bytes):
         """GATE 3: Neural Detector (Symmetric Scoring)"""
@@ -121,7 +121,7 @@ class SentinelXForensicEngine:
 
         headers = {"Authorization": f"Bearer {HF_API_TOKEN}", "Content-Type": "image/jpeg"}
         try:
-            response = requests.post(HF_API_URL, headers=headers, data=image_bytes, timeout=10)
+            response = requests.post(HF_API_URL, headers=headers, data=image_bytes, timeout=60)
             if response.status_code == 200:
                 data = response.json()
                 if isinstance(data, list) and len(data) > 0:
@@ -161,7 +161,6 @@ class SentinelXForensicEngine:
         finally:
             del lab
             del l_channel
-            gc.collect()
 
     def execute_grand_jury(self):
         """THE GRAND JURY: Dynamic Fusion & Safety Mechanisms"""
@@ -194,9 +193,13 @@ class SentinelXForensicEngine:
             
         disagreement_gap = max(active_threats) - min(active_threats)
 
+        # FIX: Added Absolute Neural Override before the disagreement gap
         if self.neural_threat >= 70.0 and self.signal_threat >= 70.0:
             fused_score = max(fused_score, 85.0)
             logic_applied = "Smoking Gun Override (Neural & Signal > 70%)"
+        elif self.neural_threat >= 90.0:
+            fused_score = max(fused_score, 80.0)
+            logic_applied = "Absolute Neural Override (Transformer Confidence > 90%)"
         elif disagreement_gap > 55.0:
             fused_score = 50.0 
             logic_applied = f"Disagreement Detection (Gap: {round(disagreement_gap)}%) -> Forced UNCERTAIN"
@@ -230,14 +233,13 @@ class SentinelXForensicEngine:
         is_fake = (fused_score >= 70.0)
         return class_code, desc, fused_score, audit_report, is_fake
 
+
 def analyze_image(image_path: str) -> dict:
     try:
         ensemble = SentinelXForensicEngine(image_path)
         
         with Image.open(image_path) as orig_img:
             img = orig_img.convert('RGB')
-            
-            # MEMORY FIX: Downscale the image via PIL BEFORE creating OpenCV arrays
             img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
             
             cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
@@ -250,7 +252,8 @@ def analyze_image(image_path: str) -> dict:
                     "error": True,
                     "classification": classification,
                     "description": desc,
-                    "reason": audit_report
+                    "reason": audit_report,
+                    "signs": list(ensemble.audit_logs.values())
                 }
 
             ensemble.gate_1_metadata(img)
@@ -263,6 +266,8 @@ def analyze_image(image_path: str) -> dict:
         ensemble.gate_4_biological()
         
         del cv_img
+        
+        # Primary garbage collection sweep for the OpenCV objects
         gc.collect()
 
         ensemble.gate_3_neural(cnn_image_bytes)
@@ -276,6 +281,7 @@ def analyze_image(image_path: str) -> dict:
             "fake_confidence": float(round(fused_score, 2)),
             "real_confidence": float(round(100.0 - fused_score, 2)),
             "reason": str(audit_report),
+            "signs": list(ensemble.audit_logs.values()),
             "detailed_analysis": {
                 "neural_threat": float(round(ensemble.neural_threat, 2)),
                 "signal_threat": float(round(ensemble.signal_threat, 2)),
@@ -288,4 +294,13 @@ def analyze_image(image_path: str) -> dict:
         }
 
     except Exception as e:
-        return {"error": True, "reason": f"System Exception: {str(e)}"}
+        # FIX: Ensure exception structure perfectly matches _normalize_image expectations
+        return {
+            "error": True, 
+            "is_fake": False,
+            "fake_confidence": 0.0,
+            "real_confidence": 0.0,
+            "status": "SYSTEM MESSAGE",
+            "reason": f"System Exception: {str(e)}", 
+            "signs": [f"Exception Trace: {str(e)}"]
+        }

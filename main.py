@@ -2,17 +2,6 @@
 Sentinel X — FastAPI Backend
 ============================
 Single-file backend that powers every endpoint consumed by `index.html`.
-
-Endpoints (all mounted under /api):
-    POST /api/scan-url        - Phishing URL analysis
-    POST /api/scan-image      - Deepfake image analysis
-    POST /api/check-password  - Password complexity + HaveIBeenPwned lookup
-    POST /api/mitigate        - LLM-generated 3-step recovery plan
-    POST /api/chat            - AI Security Copilot chat assistant
-    GET  /api/score           - Computed device security score (0-100)
-    GET  /api/ledger          - Full SHA-256 cryptographic ledger
-    GET  /api/health          - Health check
-    GET  /                    - Serves the static HTML dashboard
 """
 
 from __future__ import annotations
@@ -22,6 +11,7 @@ import math
 import os
 import re
 import tempfile
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
@@ -32,6 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -44,15 +35,11 @@ from llm_expert import generate_mitigation_plan
 from phishing_engine import analyze_url
 from trusted_domains import is_trusted_domain
 
-# ------------------------------------------------------------------------
-# Crypto Ledger (shared, in-memory singleton + optional JSON persistence)
-# ------------------------------------------------------------------------
 LEDGER_FILE = os.path.join(tempfile.gettempdir(), "sentinel_x_ledger.json")
 ledger = SecurityLedger()
 
 
 def _persist_ledger() -> None:
-    """Best-effort snapshot of the ledger to disk so the score survives restarts."""
     try:
         with open(LEDGER_FILE, "w", encoding="utf-8") as fh:
             json.dump(ledger.chain, fh, indent=2)
@@ -61,7 +48,6 @@ def _persist_ledger() -> None:
 
 
 def _restore_ledger() -> None:
-    """Reload the ledger snapshot if one exists from a previous run."""
     if not os.path.exists(LEDGER_FILE):
         return
     try:
@@ -77,15 +63,11 @@ _restore_ledger()
 
 
 def log_event(threat_type: str, risk_score: float, details: dict) -> str:
-    """Append a normalized event to the SHA-256 ledger and persist."""
     entry_hash = ledger.log_threat(threat_type, risk_score, details)
     _persist_ledger()
     return entry_hash
 
 
-# ------------------------------------------------------------------------
-# Dynamic Security Score
-# ------------------------------------------------------------------------
 def compute_security_score() -> int:
     base = 100.0
     now = datetime.now()
@@ -110,9 +92,6 @@ def compute_security_score() -> int:
     return max(0, min(100, int(round(base))))
 
 
-# ------------------------------------------------------------------------
-# Password entropy + breach look-up
-# ------------------------------------------------------------------------
 COMMON_PASSWORDS = {
     "password", "123456", "12345678", "qwerty", "abc123", "letmein",
     "welcome", "monkey", "iloveyou", "admin", "passw0rd", "sunshine",
@@ -177,13 +156,27 @@ def password_strength_label(score: int, breached: bool, common: bool) -> str:
     return "EXCELLENT"
 
 
-# ------------------------------------------------------------------------
-# FastAPI app + CORS Configuration
-# ------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if len(ledger.chain) <= 1:
         log_event("system", 0.05, {"event": "Backend online — ledger initialized"})
+        
+    # The "Wake Up" Call: Pings HF in a background thread to prevent cold starts
+    def wake_hf_model():
+        hf_token = os.getenv("HF_API_TOKEN", "")
+        if hf_token:
+            try:
+                requests.post(
+                    "https://router.huggingface.co/hf-inference/models/prithivMLmods/Deep-Fake-Detector-v2-Model",
+                    headers={"Authorization": f"Bearer {hf_token}"},
+                    json={"inputs": "wake up"},
+                    timeout=5
+                )
+            except Exception:
+                pass
+                
+    threading.Thread(target=wake_hf_model, daemon=True).start()
+    
     yield
 
 
@@ -246,7 +239,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Catches FastAPI 422 HTTP validation errors and formats them for the UI."""
     origin = request.headers.get("origin", "*")
     return JSONResponse(
         status_code=422,
@@ -267,25 +259,18 @@ if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-# ------------------------------------------------------------------------
-# Pydantic Models for Requests
-# ------------------------------------------------------------------------
 class ChatRequest(BaseModel):
     message: str
 
 
-# ------------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------------
 def to_json_serializable(val: Any) -> Any:
-    """Recursively converts NumPy types into native Python types for JSON."""
     if isinstance(val, dict):
         return {k: to_json_serializable(v) for k, v in val.items()}
     elif isinstance(val, (list, tuple, set)):
         return [to_json_serializable(x) for x in val]
-    elif hasattr(val, "item"):  # np.bool_, np.float64, np.int64
+    elif hasattr(val, "item"): 
         return val.item()
-    elif hasattr(val, "tolist"):  # np.ndarray
+    elif hasattr(val, "tolist"):
         return val.tolist()
     return val
 
@@ -365,10 +350,6 @@ def _normalize_image(raw: dict, filename: str) -> dict:
     }
 
 
-# =========================================================================
-# ROUTES (mounted under /api)
-# =========================================================================
-
 @app.get("/")
 def root():
     if os.path.exists("static/index.html"):
@@ -421,7 +402,8 @@ async def api_scan_url(
         }
 
     try:
-        raw = analyze_url(target)
+        # Offload synchronous execution to threadpool
+        raw = await run_in_threadpool(analyze_url, target)
     except Exception as exc:
         raw = {
             "is_phishing": False,
@@ -451,8 +433,6 @@ async def api_scan_url(
 
 @app.post("/api/scan-image")
 async def api_scan_image(request: Request, file: UploadFile | None = File(None)):
-    """Receives image, routes to Deepfake Engine, falls back safely if parameter binding fails."""
-    
     if file is None:
         try:
             form = await request.form()
@@ -461,13 +441,13 @@ async def api_scan_image(request: Request, file: UploadFile | None = File(None))
             pass
 
     if not file or not hasattr(file, "filename"):
-        return {
+        return JSONResponse(status_code=400, content={
             "error": True,
-            "reason": "Missing 'file' payload in form data. Ensure 'python-multipart' is installed.",
+            "reason": "Missing 'file' payload in form data.",
             "signs": ["Request parsing failed at the API gateway."]
-        }
+        })
 
-    original_filename = file.filename or "uploaded_image"
+    original_filename = file.filename
     suffix = os.path.splitext(original_filename)[1] or ".bin"
     tmp_path = None
     
@@ -476,7 +456,9 @@ async def api_scan_image(request: Request, file: UploadFile | None = File(None))
             tmp.write(await file.read())
             tmp_path = tmp.name
 
-        raw = analyze_image(tmp_path)
+        # Offload heavy CV2/NumPy synchronous execution to threadpool
+        raw = await run_in_threadpool(analyze_image, tmp_path)
+        
     except Exception as exc:
         raw = {
             "error": True, 
@@ -517,7 +499,8 @@ async def api_check_password(payload: dict):
         raise HTTPException(status_code=400, detail="Missing 'password' field.")
 
     is_common = password.lower() in COMMON_PASSWORDS
-    breach_count = hibp_pwned_count(password) if not is_common else 10_000_000
+    # Offload network-bound request
+    breach_count = await run_in_threadpool(hibp_pwned_count, password) if not is_common else 10_000_000
     complexity = password_complexity_score(password)
     entropy = password_entropy_bits(password)
     is_breached = breach_count > 0 or is_common
@@ -590,7 +573,8 @@ async def api_mitigate(payload: dict):
 
     plan = None
     try:
-        plan = generate_mitigation_plan(threat_type, risk_score)
+        # Offload generation mapping to prevent blocking
+        plan = await run_in_threadpool(generate_mitigation_plan, threat_type, risk_score)
     except Exception as exc:
         plan = {"error": str(exc)}
 
@@ -751,12 +735,16 @@ CRITICAL UI RULE: NEVER use Markdown tables. Always use standard bullet points a
             "max_tokens": 2048
         }
 
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=15
-        )
+        # Offload Groq request to threadpool to prevent UI chat freezing
+        def fetch_chat():
+            return requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=15
+            )
+
+        response = await run_in_threadpool(fetch_chat)
 
         if response.status_code == 200:
             return {"reply": response.json()["choices"][0]["message"]["content"]}
@@ -790,9 +778,6 @@ def api_ledger():
     }
 
 
-# ------------------------------------------------------------------------
-# Entry point for Render Deployment / Local Dev
-# ------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
