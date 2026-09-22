@@ -1,3 +1,4 @@
+# deepfake_engine.py
 import os
 import io
 import requests
@@ -44,7 +45,6 @@ class SentinelXForensicEngine:
             faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
             if len(faces) > 0:
                 self.bio_valid = True
-                # Use fx, fy, fw, fh to prevent variable shadowing of image dimensions
                 fx, fy, fw, fh = max(faces, key=lambda rect: rect[2] * rect[3])
                 self.face_roi = cv_img[fy:fy+fh, fx:fx+fw]
                 self.audit_logs['sentinel'] = "Resolution & Face Guards Passed."
@@ -217,8 +217,9 @@ class SentinelXForensicEngine:
             
         disagreement_gap = max(active_threats) - min(active_threats)
 
-        # --- COMPRESSION FIX 2: Widen Disagreement Tolerance ---
+        # --- COMPRESSION FIX 2: Dynamic Thresholds & Disagreement Tolerance ---
         max_allowed_gap = 75.0 if self.is_compressed else 55.0
+        fake_threshold = 60.0 if self.is_compressed else 70.0
 
         # Absolute Neural Override precedes disagreement calculations
         if self.neural_threat >= 70.0 and self.signal_threat >= 70.0:
@@ -227,13 +228,17 @@ class SentinelXForensicEngine:
         elif self.neural_threat >= 90.0:
             fused_score = max(fused_score, 80.0)
             logic_applied = "Absolute Neural Override (Transformer Confidence >= 90%)"
+        # --- NEW: Compressed Neural Override ---
+        elif self.is_compressed and self.neural_threat >= 70.0:
+            fused_score = max(fused_score, fake_threshold + 5.0)
+            logic_applied = "Compressed Neural Override (Transformer >= 70% on Lossy Media)"
         elif disagreement_gap > max_allowed_gap:
             fused_score = 50.0 
             logic_applied = f"Disagreement Detection (Gap: {round(disagreement_gap)}% > {max_allowed_gap}%) -> Forced UNCERTAIN"
 
         fused_score = max(0.0, min(100.0, float(fused_score)))
 
-        if fused_score >= 70.0:
+        if fused_score >= fake_threshold:
             verdict = "🚨 AI-GENERATED"
             class_code = "3_AI_Native" if not self.is_compressed else "4_AI_Screenshot"
             desc = "High Probability of Synthetic Media"
@@ -257,7 +262,7 @@ class SentinelXForensicEngine:
             f"▎ Decision Logic: {logic_applied}"
         )
 
-        is_fake = (fused_score >= 70.0)
+        is_fake = (fused_score >= fake_threshold)
         return class_code, desc, fused_score, audit_report, is_fake
 
 
