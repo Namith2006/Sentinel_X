@@ -235,23 +235,43 @@ class QuadGateForensicSuite:
 
 def analyze_image(image_path: str) -> dict:
     try:
-        ensemble = QuadGateForensicSuite(image_path)
+        ensemble = SentinelXForensicEngine(image_path)
         
         with Image.open(image_path) as orig_img:
             img = orig_img.convert('RGB')
-            ensemble.gate_1_container(img)
-            raw_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-            cv_img = ensemble._resize_inter_area(raw_cv)
-            buf = io.BytesIO()
+            
+            # FIX: Shrink the image using PIL *before* converting to heavy NumPy arrays
             img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+            
+            # Now this array is tiny and perfectly safe for 512MB RAM limits
+            cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+            
+            ensemble.gate_0_sentinel_guards(img, cv_img)
+            
+            if ensemble.insufficient_quality:
+                classification, desc, fused_score, audit_report, is_fake = ensemble.execute_grand_jury()
+                return {
+                    "error": True,
+                    "classification": classification,
+                    "description": desc,
+                    "reason": audit_report
+                }
+
+            ensemble.gate_1_metadata(img)
+            
+            buf = io.BytesIO()
+            # Image is already max 1024px, so this byte compression is instant
             img.save(buf, format="JPEG", quality=85)
             cnn_image_bytes = buf.getvalue()
             
         ensemble.gate_2_signal(cv_img)
-        ensemble.gate_4_biological(cv_img)
-        ensemble.gate_3_neural(cnn_image_bytes)
+        ensemble.gate_4_biological()
         
-        verdict, fused_score, audit_report = ensemble.execute_grand_jury()
+        del cv_img
+        gc.collect()
+
+        ensemble.gate_3_neural(cnn_image_bytes)
+        classification, desc, fused_score, audit_report, is_fake = ensemble.execute_grand_jury()
 
         return {
             "error": False,
