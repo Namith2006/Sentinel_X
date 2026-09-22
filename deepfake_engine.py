@@ -1,5 +1,6 @@
 import os
 import io
+import time
 import requests
 import cv2
 import numpy as np
@@ -24,6 +25,7 @@ class SentinelXForensicEngine:
         self.bio_valid = False
         self.is_screenshot = False
         self.has_trusted_signature = False
+        self.neural_failed = False
         self.face_roi = None
         self.audit_logs = {}
         
@@ -38,13 +40,10 @@ class SentinelXForensicEngine:
             is_screen_ratio = aspect_ratio >= 1.77 
             
             gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-            # Analyze top and bottom 5% for flat status/navigation bars
             top_edge_var = np.var(gray[0:int(h * 0.05), :])
             bottom_edge_var = np.var(gray[int(h * 0.95):, :])
             
-            # Native optical grain prevents near-zero variance; flat UI colors trigger this
             has_flat_ui_bars = top_edge_var < 10.0 or bottom_edge_var < 10.0
-            
             return bool(is_screen_ratio and has_flat_ui_bars)
         except Exception:
             return False
@@ -57,7 +56,6 @@ class SentinelXForensicEngine:
             self.audit_logs['sentinel'] = f"Resolution Guard Failed ({w}x{h}). Minimum 256x256 required."
             return
 
-        # Execute screenshot detection for context, not for early exit
         self.is_screenshot = self._detect_ui_capture(cv_img)
         screen_log = "[UI CAPTURE DETECTED] " if self.is_screenshot else ""
 
@@ -85,7 +83,7 @@ class SentinelXForensicEngine:
         ai_signatures = ["midjourney", "dall-e", "stable diffusion", "ai generated", "software: adobe photoshop"]
         has_ai_sig = any(sig in exif_str for sig in ai_signatures)
         
-        # Provenance Bypass Check
+        # Provenance Bypass Check (Survives WhatsApp/Bluetooth transfers)
         self.has_trusted_signature = "mes_verified_2026" in exif_str
         
         has_metadata = bool(exif and (0x010f in exif or 0x0110 in exif))
@@ -141,36 +139,56 @@ class SentinelXForensicEngine:
             if 'mag' in locals(): del mag
 
     def gate_3_neural(self, image_bytes: bytes):
-        """GATE 3: Neural Detector (Symmetric Scoring)"""
+        """GATE 3: Neural Detector (Retry Logic & Graceful Degradation)"""
         if not HF_API_TOKEN:
+            self.neural_failed = True
             self.neural_threat = 50.0
-            self.audit_logs['neural'] = "API Offline. Neutral Probability Assigned (50.0%)"
+            self.audit_logs['neural'] = "API Token Missing. Offline Mode Active."
             return
 
         headers = {"Authorization": f"Bearer {HF_API_TOKEN}", "Content-Type": "image/jpeg"}
-        try:
-            response = requests.post(HF_API_URL, headers=headers, data=image_bytes, timeout=60)
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list) and len(data) > 0:
-                    item = data[0] if isinstance(data[0], list) else data[0]
-                    fake_prob = 0.0
-                    for entry in (item if isinstance(item, list) else [item]):
-                        label = str(entry.get("label", "")).lower()
-                        score = float(entry.get("score", 0.0)) * 100.0
-                        if "fake" in label or "artificial" in label:
-                            fake_prob = score
-                        elif "real" in label and fake_prob == 0.0:
-                            fake_prob = 100.0 - score
-                            
-                    self.neural_threat = max(0.0, min(100.0, fake_prob))
-                    self.audit_logs['neural'] = f"ViT Semantic Analysis (Threat: {round(self.neural_threat,1)}%)"
-                    return
-        except Exception:
-            pass
-            
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(HF_API_URL, headers=headers, data=image_bytes, timeout=30)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if isinstance(data, list) and len(data) > 0:
+                        item = data[0] if isinstance(data[0], list) else data[0]
+                        fake_prob = 0.0
+                        for entry in (item if isinstance(item, list) else [item]):
+                            label = str(entry.get("label", "")).lower()
+                            score = float(entry.get("score", 0.0)) * 100.0
+                            if "fake" in label or "artificial" in label:
+                                fake_prob = score
+                            elif "real" in label and fake_prob == 0.0:
+                                fake_prob = 100.0 - score
+                                
+                        self.neural_threat = max(0.0, min(100.0, fake_prob))
+                        self.audit_logs['neural'] = f"ViT Semantic Analysis (Threat: {round(self.neural_threat,1)}%)"
+                        return
+                elif response.status_code == 503:
+                    # Model is loading (Cold Start) - wait and retry
+                    time.sleep(5)
+                    continue
+                else:
+                    break # Hard failure (e.g. 401 Unauthorized), exit retry loop
+                    
+            except requests.exceptions.Timeout:
+                # Timeout, try again if attempts remain
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                    continue
+                break
+            except Exception:
+                break
+                
+        # If loop finishes without returning, the API failed
+        self.neural_failed = True
         self.neural_threat = 50.0
-        self.audit_logs['neural'] = "API Timeout/Error. Neutral Probability Assigned (50.0%)"
+        self.audit_logs['neural'] = "API Offline/Timeout. Falling back to Signal/Bio Forensics."
 
     def gate_4_biological(self):
         """GATE 4: Biological Texture (Executes strictly on Detected Face ROI)"""
@@ -191,10 +209,11 @@ class SentinelXForensicEngine:
             del l_channel
 
     def execute_grand_jury(self):
-        """THE GRAND JURY: Dynamic Fusion & Safety Mechanisms"""
+        """THE GRAND JURY: Dynamic Fusion, Fallbacks & Safety Mechanisms"""
         if self.insufficient_quality:
             return "0_Error", "Insufficient Quality", 0.0, "Resolution Guard Failed. Image too small for forensic analysis.", False
 
+        # --- DEMO SAFETY NET: Zero-Trust Asset Provenance Override ---
         if getattr(self, 'has_trusted_signature', False):
             verdict = "✅ AUTHENTIC"
             class_code = "2_Real_Screenshot" if self.is_screenshot else "1_Real_Native"
@@ -209,15 +228,23 @@ class SentinelXForensicEngine:
             )
             return class_code, desc, fused_score, audit_report, False
 
-        w_neural, w_signal, w_bio, w_meta = 0.55, 0.20, 0.15, 0.10
-        logic_applied = "Standard Normalized Evidence Fusion"
+        # --- DYNAMIC WEIGHT SELECTION ---
+        if self.neural_failed:
+            # Graceful Degradation: Neural model is dead, rely entirely on local forensic algorithms
+            w_neural, w_signal, w_bio, w_meta = 0.0, 0.60, 0.25, 0.15
+            logic_applied = "API Offline -> Fallback Math Fusion (Signal/Bio Prioritized)"
+        else:
+            w_neural, w_signal, w_bio, w_meta = 0.55, 0.20, 0.15, 0.10
+            logic_applied = "Standard Normalized Evidence Fusion"
 
+        # --- COMPRESSION OFFSETS ---
         if self.is_compressed:
             w_signal *= 0.5  
             if self.bio_valid:
                 w_bio *= 0.2  
-            w_neural *= 1.3   
-            logic_applied = "Lossy Compression Detected -> Texture/Signal Penalized, Neural Prioritized"
+            if not self.neural_failed:
+                w_neural *= 1.3   
+            logic_applied += " | Lossy Compression Adjusted"
             
         if not self.bio_valid:
             w_bio = 0.0      
@@ -232,25 +259,28 @@ class SentinelXForensicEngine:
             (self.meta_threat * w_meta)
         )
 
-        active_threats = [self.neural_threat, self.signal_threat, self.meta_threat]
-        if self.bio_valid: 
-            active_threats.append(self.bio_threat)
+        active_threats = [self.signal_threat, self.meta_threat]
+        if not self.neural_failed: active_threats.append(self.neural_threat)
+        if self.bio_valid: active_threats.append(self.bio_threat)
             
-        disagreement_gap = max(active_threats) - min(active_threats)
+        disagreement_gap = max(active_threats) - min(active_threats) if active_threats else 0.0
 
         max_allowed_gap = 75.0 if self.is_compressed else 55.0
         fake_threshold = 60.0 if self.is_compressed else 70.0
 
-        if self.neural_threat >= 70.0 and self.signal_threat >= 70.0:
-            fused_score = max(fused_score, 85.0)
-            logic_applied = "Smoking Gun Override (Neural & Signal > 70%)"
-        elif self.neural_threat >= 90.0:
-            fused_score = max(fused_score, 80.0)
-            logic_applied = "Absolute Neural Override (Transformer Confidence >= 90%)"
-        elif self.is_compressed and self.neural_threat >= 70.0:
-            fused_score = max(fused_score, fake_threshold + 5.0)
-            logic_applied = "Compressed Neural Override (Transformer >= 70% on Lossy Media)"
-        elif disagreement_gap > max_allowed_gap:
+        # Overrides only apply if Neural actually executed successfully
+        if not self.neural_failed:
+            if self.neural_threat >= 70.0 and self.signal_threat >= 70.0:
+                fused_score = max(fused_score, 85.0)
+                logic_applied = "Smoking Gun Override (Neural & Signal > 70%)"
+            elif self.neural_threat >= 90.0:
+                fused_score = max(fused_score, 80.0)
+                logic_applied = "Absolute Neural Override (Transformer Confidence >= 90%)"
+            elif self.is_compressed and self.neural_threat >= 70.0:
+                fused_score = max(fused_score, fake_threshold + 5.0)
+                logic_applied = "Compressed Neural Override (Transformer >= 70% on Lossy Media)"
+        
+        if disagreement_gap > max_allowed_gap:
             fused_score = 50.0 
             logic_applied = f"Disagreement Detection (Gap: {round(disagreement_gap)}% > {max_allowed_gap}%) -> Forced UNCERTAIN"
 
