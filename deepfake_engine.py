@@ -276,11 +276,11 @@ def analyze_image(image_path: str) -> dict:
 
         return {
             "error": False,
-            "classification": classification,
-            "description": desc,
             "is_fake": bool(is_fake),
             "fake_confidence": float(round(fused_score, 2)),
             "real_confidence": float(round(100.0 - fused_score, 2)),
+            "classification": classification,
+            "description": desc,
             "reason": str(audit_report),
             "signs": list(ensemble.audit_logs.values()),
             "detailed_analysis": {
