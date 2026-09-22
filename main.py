@@ -1,3 +1,4 @@
+# main.py
 """
 Sentinel X — FastAPI Backend
 ============================
@@ -402,7 +403,6 @@ async def api_scan_url(
         }
 
     try:
-        # Offload synchronous execution to threadpool
         raw = await run_in_threadpool(analyze_url, target)
     except Exception as exc:
         raw = {
@@ -456,7 +456,6 @@ async def api_scan_image(request: Request, file: UploadFile | None = File(None))
             tmp.write(await file.read())
             tmp_path = tmp.name
 
-        # Offload heavy CV2/NumPy synchronous execution to threadpool
         raw = await run_in_threadpool(analyze_image, tmp_path)
         
     except Exception as exc:
@@ -476,14 +475,15 @@ async def api_scan_image(request: Request, file: UploadFile | None = File(None))
     result = to_json_serializable(result)
     
     try:
-        log_event(
-            threat_type="deepfake",
-            risk_score=float(result["risk_score"]) / 100.0,
-            details={
-                "filename": result["filename"],
-                "is_fake": bool(result["is_fake"]),
-            },
-        )
+        if not result.get("error"):
+            log_event(
+                threat_type="deepfake",
+                risk_score=float(result["risk_score"]) / 100.0,
+                details={
+                    "filename": result["filename"],
+                    "is_fake": bool(result["is_fake"]),
+                },
+            )
     except Exception:
         pass
         
@@ -499,7 +499,6 @@ async def api_check_password(payload: dict):
         raise HTTPException(status_code=400, detail="Missing 'password' field.")
 
     is_common = password.lower() in COMMON_PASSWORDS
-    # Offload network-bound request
     breach_count = await run_in_threadpool(hibp_pwned_count, password) if not is_common else 10_000_000
     complexity = password_complexity_score(password)
     entropy = password_entropy_bits(password)
@@ -573,7 +572,6 @@ async def api_mitigate(payload: dict):
 
     plan = None
     try:
-        # Offload generation mapping to prevent blocking
         plan = await run_in_threadpool(generate_mitigation_plan, threat_type, risk_score)
     except Exception as exc:
         plan = {"error": str(exc)}
@@ -735,7 +733,6 @@ CRITICAL UI RULE: NEVER use Markdown tables. Always use standard bullet points a
             "max_tokens": 2048
         }
 
-        # Offload Groq request to threadpool to prevent UI chat freezing
         def fetch_chat():
             return requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",

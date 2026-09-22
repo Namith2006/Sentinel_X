@@ -1,3 +1,4 @@
+# deepfake_engine.py
 import os
 import io
 import requests
@@ -44,7 +45,7 @@ class SentinelXForensicEngine:
             faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
             if len(faces) > 0:
                 self.bio_valid = True
-                # FIX: Prevent variable shadowing by using fx, fy, fw, fh
+                # Use fx, fy, fw, fh to prevent variable shadowing of image dimensions
                 fx, fy, fw, fh = max(faces, key=lambda rect: rect[2] * rect[3])
                 self.face_roi = cv_img[fy:fy+fh, fx:fx+fw]
                 self.audit_logs['sentinel'] = "Resolution & Face Guards Passed."
@@ -193,13 +194,13 @@ class SentinelXForensicEngine:
             
         disagreement_gap = max(active_threats) - min(active_threats)
 
-        # FIX: Added Absolute Neural Override before the disagreement gap
+        # Absolute Neural Override precedes disagreement calculations
         if self.neural_threat >= 70.0 and self.signal_threat >= 70.0:
             fused_score = max(fused_score, 85.0)
             logic_applied = "Smoking Gun Override (Neural & Signal > 70%)"
         elif self.neural_threat >= 90.0:
             fused_score = max(fused_score, 80.0)
-            logic_applied = "Absolute Neural Override (Transformer Confidence > 90%)"
+            logic_applied = "Absolute Neural Override (Transformer Confidence >= 90%)"
         elif disagreement_gap > 55.0:
             fused_score = 50.0 
             logic_applied = f"Disagreement Detection (Gap: {round(disagreement_gap)}%) -> Forced UNCERTAIN"
@@ -294,7 +295,6 @@ def analyze_image(image_path: str) -> dict:
         }
 
     except Exception as e:
-        # FIX: Ensure exception structure perfectly matches _normalize_image expectations
         return {
             "error": True, 
             "is_fake": False,
