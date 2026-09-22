@@ -11,6 +11,27 @@ HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
 HF_API_URL = "https://router.huggingface.co/hf-inference/models/prithivMLmods/Deep-Fake-Detector-v2-Model"
 
 class SentinelXForensicEngine:
+    def _detect_screenshot(self, cv_img: np.ndarray) -> bool:
+        """Detects UI elements, aspect ratios, and flat color bars typical of screenshots."""
+        try:
+            h, w = cv_img.shape[:2]
+            
+            # 1. Aspect Ratio check (modern phone screens are typically 16:9, 19.5:9, etc.)
+            aspect_ratio = max(h, w) / min(h, w)
+            is_screen_ratio = aspect_ratio >= 1.77 
+            
+            # 2. Status Bar / UI Check (Extremely low variance at the very top or bottom)
+            gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+            top_edge_var = np.var(gray[0:int(h * 0.05), :])
+            bottom_edge_var = np.var(gray[int(h * 0.95):, :])
+            
+            # Perfect horizontal color blocks (like a black navigation bar or white status bar) 
+            # have almost zero variance. Native photos always have optical grain.
+            has_flat_ui_bars = top_edge_var < 10.0 or bottom_edge_var < 10.0
+            
+            return bool(is_screen_ratio and has_flat_ui_bars)
+        except Exception:
+            return False
     def __init__(self, image_path: str):
         self.image_path = image_path
         
