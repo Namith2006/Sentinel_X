@@ -735,7 +735,7 @@ CRITICAL UI RULE: NEVER use Markdown tables. Always use standard bullet points a
         }
 
         payload = {
-            "model": "llama-3.1-70b-versatile",
+            "model": "openai/gpt-oss-120b",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"User Request: {user_message}\n\nSystem Logs:\n{log_context}"}
