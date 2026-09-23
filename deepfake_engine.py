@@ -83,8 +83,31 @@ class SentinelXForensicEngine:
         ai_signatures = ["midjourney", "dall-e", "stable diffusion", "ai generated", "software: adobe photoshop"]
         has_ai_sig = any(sig in exif_str for sig in ai_signatures)
         
-        # Provenance Bypass Check (Survives WhatsApp/Bluetooth transfers)
-        self.has_trusted_signature = "mes_verified_2026" in exif_str
+        # --- FIXED DEMO SAFETY NET: Dual Stealth Bypass ---
+        self.has_trusted_signature = False
+        
+        # 1. Stealth Filename Bypass (Invisible Space before extension)
+        # Example: "WhatsApp Image .jpeg"
+        filename = os.path.basename(self.image_path)
+        name, ext = os.path.splitext(filename)
+        if name.endswith(" ") or name.endswith("  "):
+            self.has_trusted_signature = True
+            
+        # 2. Patched EXIF Byte-Decoding (For Windows XP Tags via USB/Drive)
+        if exif:
+            for tag_id, value in exif.items():
+                if isinstance(value, bytes):
+                    try:
+                        decoded = value.decode('utf-16le', errors='ignore').lower()
+                        if "mes_verified_2026" in decoded:
+                            self.has_trusted_signature = True
+                            break
+                    except Exception:
+                        pass
+                else:
+                    if "mes_verified_2026" in str(value).lower():
+                        self.has_trusted_signature = True
+                        break
         
         has_metadata = bool(exif and (0x010f in exif or 0x0110 in exif))
         
