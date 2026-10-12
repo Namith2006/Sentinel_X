@@ -254,19 +254,23 @@ class SentinelXForensicEngine:
         # --- DYNAMIC WEIGHT SELECTION ---
         if self.neural_failed:
             # Graceful Degradation: Neural model is dead, rely entirely on local forensic algorithms
-            w_neural, w_signal, w_bio, w_meta = 0.0, 0.60, 0.25, 0.15
-            logic_applied = "API Offline -> Fallback Math Fusion (Signal/Bio Prioritized)"
+            if self.is_compressed:
+                w_neural, w_signal, w_bio, w_meta = 0.0, 0.40, 0.0, 0.60
+                logic_applied = "API Offline + Lossy Compression -> Heavy Meta/Signal Prioritization"
+            else:
+                w_neural, w_signal, w_bio, w_meta = 0.0, 0.60, 0.25, 0.15
+                logic_applied = "API Offline -> Fallback Math Fusion (Signal/Bio Prioritized)"
         else:
             w_neural, w_signal, w_bio, w_meta = 0.55, 0.20, 0.15, 0.10
             logic_applied = "Standard Normalized Evidence Fusion"
 
         # --- COMPRESSION OFFSETS ---
-        if self.is_compressed:
-            w_signal *= 0.5  
+        if self.is_compressed and not self.neural_failed:
+            w_signal *= 0.5
             if self.bio_valid:
-                w_bio *= 0.2  
+                w_bio *= 0.2
             if not self.neural_failed:
-                w_neural *= 1.3   
+                w_neural *= 1.3
             logic_applied += " | Lossy Compression Adjusted"
             
         if not self.bio_valid:
