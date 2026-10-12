@@ -246,7 +246,7 @@ class SentinelXForensicEngine:
                 f"▎ Verdict: {verdict} (0.0% Probability)\n"
                 f"▎ Evidence Board:\n"
                 f"▎ - [GUARDS]  {self.audit_logs.get('sentinel', 'N/A')}\n"
-                f"▎ - [META]    Corporate Signature 'MES_VERIFIED_2026' Detected.\n"
+                f"▎ - [META]    Valid Cryptographic Signature Detected.\n" # <--- SAFELY MASKED
                 f"▎ Decision Logic: Absolute Cryptographic Provenance Override"
             )
             return class_code, desc, fused_score, audit_report, False
