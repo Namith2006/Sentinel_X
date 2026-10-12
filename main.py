@@ -594,15 +594,25 @@ async def api_mitigate(payload: dict):
         "low"
     )
 
+    titles = {
+        "phishing":       ["Disconnect & Quarantine", "Rotate Credentials", "Harden Defenses"],
+        "deepfake":       ["Quarantine the Asset", "Trace the Origin", "Notify Stakeholders"],
+        "weak_password":  ["Rotate the Secret", "Enable MFA Everywhere", "Adopt a Password Manager"],
+    }
+    defaults = titles.get(threat_type, ["Isolate", "Eradicate", "Recover"])
+    
+    # Professional fallback text if the LLM misses a step
+    default_details = [
+        f"Disconnect the affected endpoint, revoke active sessions, and disable shared credentials related to this {threat_type} incident.",
+        "Remove the malicious artifact, rotate exposed secrets, and apply the latest vendor patches and IOC blocklists.",
+        "Restore from the most recent SHA-256-verified backup, re-enable continuous monitoring, and document lessons learned."
+    ]
+
+    structured_steps = []
+
+    # Parse whatever the LLM successfully generated
     if isinstance(plan, dict) and "steps" in plan and plan["steps"]:
         raw_steps = plan["steps"]
-        structured_steps = []
-        titles = {
-            "phishing":       ["Disconnect & Quarantine", "Rotate Credentials", "Harden Defenses"],
-            "deepfake":       ["Quarantine the Asset", "Trace the Origin", "Notify Stakeholders"],
-            "weak_password":  ["Rotate the Secret", "Enable MFA Everywhere", "Adopt a Password Manager"],
-        }
-        defaults = titles.get(threat_type, ["Isolate", "Eradicate", "Recover"])
         for i, step in enumerate(raw_steps[:3]):
             if isinstance(step, dict):
                 structured_steps.append({
@@ -616,30 +626,16 @@ async def api_mitigate(payload: dict):
                 })
         threat_level = plan.get("threat_level") or severity
     else:
-        structured_steps = [
-            {
-                "title": "Isolate",
-                "detail": (
-                    f"Disconnect the affected endpoint, revoke active sessions, "
-                    f"and disable shared credentials related to this {threat_type} incident."
-                ),
-            },
-            {
-                "title": "Eradicate",
-                "detail": (
-                    "Remove the malicious artifact, rotate exposed secrets, "
-                    "and apply the latest vendor patches and IOC blocklists."
-                ),
-            },
-            {
-                "title": "Recover",
-                "detail": (
-                    "Restore from the most recent SHA-256-verified backup, "
-                    "re-enable continuous monitoring, and document lessons learned."
-                ),
-            },
-        ]
         threat_level = severity
+
+    # --- THE FIX: GUARANTEE EXACTLY 3 STEPS ---
+    # If the LLM returned 0, 1, or 2 steps, we mathematically auto-fill the rest.
+    while len(structured_steps) < 3:
+        idx = len(structured_steps)
+        structured_steps.append({
+            "title": defaults[idx] if idx < len(defaults) else f"Step {idx+1}",
+            "detail": default_details[idx]
+        })
 
     return {
         "status": "ok",
@@ -649,7 +645,6 @@ async def api_mitigate(payload: dict):
         "steps": structured_steps,
         "source": "llm" if isinstance(plan, dict) and "steps" in plan and plan["steps"] else "fallback",
     }
-
 
 @app.post("/api/chat")
 async def security_copilot_chat(request: Request):
