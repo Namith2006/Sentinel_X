@@ -344,7 +344,10 @@
                         <span class="text-2xl">🤖</span>
                         <h2 class="font-semibold text-purple-300">AI Incident Expert (Llama-3)</h2>
                     </div>
-                    <span id="expertStatus" class="text-[10px] text-slate-500 font-mono">standby</span>
+                    <div class="flex items-center gap-3">
+                        <span id="expertStatus" class="text-[10px] text-slate-500 font-mono">standby</span>
+                        <button onclick="clearMitigation()" title="Clear Mitigation" class="text-slate-500 hover:text-white transition text-lg leading-none">&times;</button>
+                    </div>
                 </div>
                 <div id="expertPanel" class="flex-1 overflow-y-auto scrollbar-thin bg-cyber-900/50 rounded-lg p-4 min-h-[280px] max-h-[360px]">
                     <div class="text-slate-500 text-sm italic flex items-center gap-2">
@@ -477,16 +480,25 @@
             const extra = $(extraId);
             if (extra) extra.textContent = "No file selected";
         }
+        clearMitigation();
+    }
+
+    function clearMitigation() {
+        const panel = $("expertPanel");
+        const status = $("expertStatus");
+        if (panel) {
+            panel.innerHTML = '<div class="text-slate-500 text-sm italic flex items-center gap-2"><span class="led-dot led-busy"></span>No active incident. Mitigation engine is on standby.</div>';
+        }
+        if (status) {
+            status.textContent = "standby";
+        }
     }
 
     function clearAll() {
         closeResult('urlResult', 'urlInput');
         closeResult('imageResult', 'imageInput', 'fileName');
         closeResult('passwordResult', 'passwordInput');
-        const expertPanel = $("expertPanel");
-        const expertStatus = $("expertStatus");
-        if (expertPanel) expertPanel.innerHTML = '<div class="text-slate-500 text-sm italic flex items-center gap-2"><span class="led-dot led-busy"></span>No active incident. Mitigation engine is on standby.</div>';
-        if (expertStatus) expertStatus.textContent = "standby";
+        clearMitigation();
     }
 
     function setBackend(status) {
@@ -743,6 +755,7 @@
                     <div class="break-all"><strong>URL:</strong> ${url}</div>
                     <div><strong>Risk:</strong> ${risk.toFixed(1)}%</div>
                     <div class="text-xs text-emerald-300/80 mt-1">${data.reason || "No phishing indicators found."}</div>`;
+                clearMitigation();
             }
             if (isThreat || isSuspicious) triggerMitigation("phishing", { url, risk, ...data });
             logLedger("phishing", isThreat ? "THREAT" : (isSuspicious ? "SUSPICIOUS" : "SAFE"));
@@ -832,6 +845,11 @@ async function handleFileUpload(event) {
                 theme = "amber";
                 verdictTitle = "⚠️ UNCERTAIN / COMPRESSED";
                 ledgerStatus = "UNCERTAIN";
+            } else {
+                theme = "emerald";
+                verdictTitle = "✅ AUTHENTIC MEDIA";
+                ledgerStatus = "AUTHENTIC";
+                clearMitigation();
             }
 
             // Format multi-line forensic audit report
@@ -912,6 +930,7 @@ async function handleFileUpload(event) {
                     <div><strong>Strength:</strong> ${strength}/100</div>
                     <div><strong>Breach History:</strong> 0 known breaches</div>
                     <div class="text-xs text-emerald-300/80 mt-1">${data.suggestion || "Password looks strong."}</div>`;
+                clearMitigation();
             }
             if (isCompromised) triggerMitigation("weak_password", { length: pw.length, breachCount, strength, ...data });
             logLedger("password", isCompromised ? "COMPROMISED" : (strength >= 80 ? "STRONG" : "OK"));
